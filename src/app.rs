@@ -1,8 +1,16 @@
+// src/app.rs
 use std::{fs::File, io::Read};
-
-use ratatui::widgets::ListState;
+use ratatui::{
+    Frame, 
+    widgets::ListState
+};
+use crossterm::event::KeyEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::{garden_api::{orderbook::Orderbook, quote::Quote}, states::{
+    network_information::NetworkInformationState, network_selection::NetworkSelectionState, strategy_selector::StrategySelector, State, StateType
+}};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NetworkUrls {
@@ -11,18 +19,23 @@ pub struct NetworkUrls {
     pub virtual_balance_server_url: String,
 }
 
-pub enum AppState {
-    NetworkSelection,
-    NetworkInformation,
-}
-
-pub struct App {
-    pub state: AppState,
+pub struct AppContext {
     pub network_list_state: ListState,
     pub networks: Vec<&'static str>,
     pub api_urls: Option<Value>,
     pub selected_network_urls: Option<NetworkUrls>,
     pub selected_network: Option<String>,
+    pub final_message: Option<String>,
+    pub quote: Option<Quote>,
+    pub orderbook: Option<Orderbook>,
+    pub current_strategy: Option<String>,
+    pub strategy_selector: Option<StrategySelector>
+}
+
+pub struct App {
+    pub context: AppContext,
+    state: Box<dyn State>,
+    pub should_quit: bool,
 }
 
 impl App {
@@ -30,86 +43,64 @@ impl App {
         let mut network_list_state = ListState::default();
         network_list_state.select(Some(0));
         
-        App {
-            state: AppState::NetworkSelection,
+        let context = AppContext {
             network_list_state,
             networks: vec!["Mainnet", "Testnet", "Localnet"],
             api_urls: None,
             selected_network_urls: None,
             selected_network: None,
+            final_message: None,
+            quote: None,
+            orderbook: None,
+            current_strategy: None,
+            strategy_selector: None
+        };
+        
+        App {
+            context,
+            state: Box::new(NetworkSelectionState::new()),
+            should_quit: false,
         }
     }
-
-    pub fn next(&mut self) {
-        let i = match self.network_list_state.selected() {
-            Some(i) => {
-                if i >= self.networks.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            None => 0,
-        };
-        self.network_list_state.select(Some(i));
-    }
-
-    pub fn previous(&mut self) {
-        let i = match self.network_list_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.networks.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
-        };
-        self.network_list_state.select(Some(i));
-    }
-
+    
     pub fn load_api_urls(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = File::open("api.json")?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         
-        self.api_urls = Some(serde_json::from_str(&contents)?);
+        self.context.api_urls = Some(serde_json::from_str(&contents)?);
         Ok(())
     }
-
-    pub fn select_network(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(api_urls) = &self.api_urls {
-            if let Some(selected) = self.network_list_state.selected() {
-                let network_key = self.networks[selected].to_lowercase();
-                self.selected_network = Some(self.networks[selected].to_string());
-                
-                if let Some(network_config) = api_urls.get(&network_key) {
-                    // Parse the network config object
-                    if let Some(evm_url) = network_config.get("evm_relayer_url").and_then(|v| v.as_str()) {
-                        if let Some(quote_url) = network_config.get("quote_server_url").and_then(|v| v.as_str()) {
-                            if let Some(vb_url) = network_config.get("virtual_balance_server_url").and_then(|v| v.as_str()) {
-                                self.selected_network_urls = Some(NetworkUrls {
-                                    evm_relayer_url: evm_url.to_string(),
-                                    quote_server_url: quote_url.to_string(),
-                                    virtual_balance_server_url: vb_url.to_string(),
-                                });
-                                
-                                // Change app state to display network info
-                                self.state = AppState::NetworkInformation;
-                                return Ok(());
-                            }
-                        }
-                    }
-                }
-                
-                return Err(format!("Could not find valid URLs for network: {}", network_key).into());
-            }
-        }
-        
-        Err("API URLs not loaded".into())
+    
+    pub fn draw(&mut self, frame: &mut Frame) {
+        self.state.draw(frame, &mut self.context);
     }
     
-    pub fn back_to_selection(&mut self) {
-        self.state = AppState::NetworkSelection;
+    pub fn handle_key(&mut self, key: KeyEvent) {
+        // Get the next state type from the current state
+        let next_state = self.state.handle_key(key, &mut self.context);
+        
+        // Handle state transitions
+        if let Some(state_type) = next_state {
+            match state_type {
+                StateType::NetworkSelection => {
+                    self.state = Box::new(NetworkSelectionState::new());
+                },
+                StateType::NetworkInformation => {
+                    self.state = Box::new(NetworkInformationState::new());
+                },
+                StateType::Quit => {
+                    self.should_quit = true;
+                },
+                StateType::Exit(message) => {
+                    self.context.final_message = Some(message);
+                    self.should_quit = true;
+                },
+            }
+        }
+    }
+    
+    pub fn get_final_message(&self) -> Option<String> {
+        self.context.final_message.clone()
     }
 }
