@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{layout::Rect, style::{Modifier, Style}, widgets::{Block, Borders, List, ListItem, ListState}, Frame};
-use sha2::digest::Key;
+use ratatui::{
+    layout::Rect,
+    style::{Modifier, Style},
+    widgets::{Block, Borders, List, ListItem, ListState},
+    Frame,
+};
 
 use crate::{app::AppContext, garden_api::types::Strategy};
 
@@ -19,19 +23,16 @@ impl StrategySelector {
             .iter()
             .map(|(id, strategy)| (id.clone(), strategy.clone()))
             .collect();
-        
+
         let mut state = ListState::default();
         // Select the first item by default if available
         if !strategies.is_empty() {
             state.select(Some(0));
         }
-        
-        StrategySelector {
-            state,
-            strategies,
-        }
+
+        StrategySelector { state, strategies }
     }
-    
+
     // Method to select the next item
     pub fn next(&mut self) {
         let i = match self.state.selected() {
@@ -46,7 +47,7 @@ impl StrategySelector {
         };
         self.state.select(Some(i));
     }
-    
+
     // Method to select the previous item
     pub fn previous(&mut self) {
         let i = match self.state.selected() {
@@ -61,7 +62,7 @@ impl StrategySelector {
         };
         self.state.select(Some(i));
     }
-    
+
     // Get the currently selected strategy (if any)
     pub fn selected_strategy(&self) -> Option<&(String, Strategy)> {
         self.state.selected().map(|i| &self.strategies[i])

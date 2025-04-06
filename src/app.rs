@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{garden_api::{orderbook::Orderbook, quote::Quote}, states::{
-    network_information::NetworkInformationState, network_selection::NetworkSelectionState, strategy_selector::StrategySelector, State, StateType
+    network_information::NetworkInformationState, network_selection::NetworkSelectionState, strategy_selector::StrategySelector, swap_information::SwapDashboardState, State, StateType
 }};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -88,6 +88,9 @@ impl App {
                 },
                 StateType::NetworkInformation => {
                     self.state = Box::new(NetworkInformationState::new());
+                },
+                StateType::Swapinformation => {
+                  self.state = Box::new(SwapDashboardState::new());  
                 },
                 StateType::Quit => {
                     self.should_quit = true;
