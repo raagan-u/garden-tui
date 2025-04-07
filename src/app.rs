@@ -1,5 +1,6 @@
 // src/app.rs
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, str::FromStr};
+use alloy::{network::EthereumWallet, signers::{k256::ecdsa::SigningKey, local::{LocalSigner, PrivateKeySigner}}};
 use ratatui::{
     Frame, 
     widgets::ListState
@@ -8,7 +9,7 @@ use crossterm::event::KeyEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{garden_api::{orderbook::Orderbook, quote::Quote}, states::{
+use crate::{garden_api::{orderbook::Orderbook, quote::Quote, types::Order}, states::{
     network_information::NetworkInformationState, network_selection::NetworkSelectionState, strategy_selector::StrategySelector, swap_information::SwapDashboardState, State, StateType
 }};
 
@@ -29,7 +30,10 @@ pub struct AppContext {
     pub quote: Option<Quote>,
     pub orderbook: Option<Orderbook>,
     pub current_strategy: Option<String>,
-    pub strategy_selector: Option<StrategySelector>
+    pub strategy_selector: Option<StrategySelector>,
+    pub current_order: Option<Order>,
+    pub eth_wallet: EthereumWallet,
+    pub signer: LocalSigner<SigningKey>
 }
 
 pub struct App {
@@ -39,10 +43,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> App {
+    pub fn new(eth_priv_key: &str) -> App {
         let mut network_list_state = ListState::default();
         network_list_state.select(Some(0));
         
+        let signer = PrivateKeySigner::from_str(eth_priv_key).unwrap();
         let context = AppContext {
             network_list_state,
             networks: vec!["Mainnet", "Testnet", "Localnet"],
@@ -53,7 +58,10 @@ impl App {
             quote: None,
             orderbook: None,
             current_strategy: None,
-            strategy_selector: None
+            strategy_selector: None,
+            current_order: None,
+            eth_wallet: EthereumWallet::from(signer.clone()),
+            signer: signer.clone()
         };
         
         App {

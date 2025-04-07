@@ -23,5 +23,5 @@ pub trait State {
 
     /// Handle key events for the current state
     /// Returns Some(StateType) if a state transition should occur, None otherwise
-    fn handle_key(&self, key: KeyEvent, context: &mut AppContext) -> Option<StateType>;
+    fn handle_key(&mut self, key: KeyEvent, context: &mut AppContext) -> Option<StateType>;
 }

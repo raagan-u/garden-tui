@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use alloy::{hex::FromHex, primitives::{Address, FixedBytes, Uint}};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, FromPrimitive};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +35,43 @@ pub struct Order {
     pub timelock: u64,
     pub secret_hash: String,
     pub additional_data: AdditionalData,
+}
+
+pub struct OrderInputData {
+    pub initiator_source_address: String,
+    pub in_amount: u64,
+    pub out_amount: u64,
+    pub secret_hash: String,
+    pub strategy: Strategy,
+    pub btc_opt_recepient: Option<String>
+}
+
+impl Order {
+    pub fn new(order_data: OrderInputData) -> Self {
+        Self { 
+            source_chain: order_data.strategy.source_chain, 
+            destination_chain: order_data.strategy.dest_chain, 
+            source_asset: order_data.strategy.source_asset.asset, 
+            destination_asset: order_data.strategy.dest_asset.asset, 
+            initiator_source_address: order_data.initiator_source_address, 
+            initiator_destination_address: order_data.strategy.dest_chain_address, 
+            source_amount: BigDecimal::from_u64(order_data.in_amount).unwrap(), 
+            destination_amount: BigDecimal::from_u64(order_data.out_amount).unwrap(), 
+            fee: BigDecimal::from_u64(order_data.strategy.fee).unwrap(), 
+            nonce: BigDecimal::from_u64(100).unwrap(), 
+            min_destination_confirmations: 1, 
+            timelock: order_data.strategy.min_source_timelock, 
+            secret_hash: order_data.secret_hash, 
+            additional_data: AdditionalData { 
+                strategy_id: order_data.strategy.id, 
+                bitcoin_optional_recipient: order_data.btc_opt_recepient, 
+                input_token_price: None, 
+                output_token_price: None, 
+                sig: None, 
+                deadline: None 
+            } 
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

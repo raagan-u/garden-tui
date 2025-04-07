@@ -1,5 +1,5 @@
 // src/main.rs
-use std::error::Error;
+use std::{env, error::Error};
 use ratatui::{
     backend::CrosstermBackend,
     Terminal,
@@ -18,6 +18,7 @@ mod states;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let eth_priv_key = env::var("ETH_PRIV_KEY").expect("please provide a valid ETH_PRIV_KEY in env");
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
@@ -26,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     // Create app and load API URLs
-    let mut app = App::new();
+    let mut app = App::new(&eth_priv_key);
     app.load_api_urls()?;
 
     // Main loop

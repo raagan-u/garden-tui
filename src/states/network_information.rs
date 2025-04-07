@@ -23,7 +23,7 @@ impl State for NetworkInformationState {
         // Create common elements
         let title_span = Span::styled(
             "Garden-TUI 0.0.1", 
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD)
         );
         let title_line = Line::from(vec![title_span]);
         
@@ -161,11 +161,10 @@ impl State for NetworkInformationState {
         
         // Instructions
         let instructions_spans = vec![
-            Span::styled("↑/↓: Navigate | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Enter: Select Strategy | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("b: Back | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("c: Continue | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("q: Quit", Style::default().fg(Color::DarkGray)),
+            Span::styled("↑/↓: Navigate | ", Style::default().fg(Color::Red)),
+            Span::styled("Enter: Select Strategy | ", Style::default().fg(Color::Red)),
+            Span::styled("b: Back | ", Style::default().fg(Color::Red)),
+            Span::styled("q: Quit", Style::default().fg(Color::Red)),
         ];
         
         frame.render_widget(
@@ -175,31 +174,10 @@ impl State for NetworkInformationState {
         );
     }
     
-    fn handle_key(&self, key: KeyEvent, context: &mut AppContext) -> Option<StateType> {
+    fn handle_key(&mut self, key: KeyEvent, context: &mut AppContext) -> Option<StateType> {
         match key.code {
             KeyCode::Char('q') => Some(StateType::Quit),
             KeyCode::Char('b') => Some(StateType::NetworkSelection),
-            KeyCode::Char('c') => {
-                // Only continue if a strategy is selected
-                if context.current_strategy.is_some() {
-                    if let (Some(network), Some(urls)) = (&context.selected_network, &context.selected_network_urls) {
-                        let message = format!(
-                            "Selected network: {}\nEVM Relayer URL: {}\nQuote Server URL: {}\nVirtual Balance Server URL: {}\nSelected Strategy: {}",
-                            network,
-                            urls.evm_relayer_url,
-                            urls.quote_server_url,
-                            urls.virtual_balance_server_url,
-                            context.current_strategy.as_ref().unwrap()
-                        );
-                        Some(StateType::Exit(message))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            },
-            // Add navigation keys for the strategy selector
             KeyCode::Up => {
                 if let Some(selector) = context.strategy_selector.as_mut() {
                     selector.previous();
@@ -218,7 +196,7 @@ impl State for NetworkInformationState {
                         context.current_strategy = Some(id.clone());
                     }
                 }
-                None
+                Some(StateType::Swapinformation)
             },
             _ => None,
         }

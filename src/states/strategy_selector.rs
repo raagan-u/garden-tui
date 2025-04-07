@@ -1,14 +1,8 @@
 use std::collections::HashMap;
 
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    layout::Rect,
-    style::{Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState},
-    Frame,
-};
+use ratatui::widgets::ListState;
 
-use crate::{app::AppContext, garden_api::types::Strategy};
+use crate::garden_api::types::Strategy;
 
 // First, create a struct to hold the state of the list selection
 pub struct StrategySelector {

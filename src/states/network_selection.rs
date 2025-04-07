@@ -7,7 +7,6 @@ use ratatui::{
     text::{Line, Span},
 };
 use crossterm::event::{KeyCode, KeyEvent};
-use reqwest::Client;
 
 use crate::{app::AppContext, garden_api::{orderbook::Orderbook, quote::Quote}};
 use super::{State, StateType};
@@ -65,7 +64,7 @@ impl NetworkSelectionState {
                                 });
                                 
                                 let http_client = reqwest::blocking::Client::new();
-                                let mut quote = Quote::new(
+                                let quote = Quote::new(
                                     http_client.clone(),
                                     quote_url.to_string()
                                 );
@@ -99,7 +98,7 @@ impl State for NetworkSelectionState {
         // Create common elements
         let title_span = Span::styled(
             "Garden-TUI 0.0.1", 
-            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD)
         );
         let title_line = Line::from(vec![title_span]);
         
@@ -145,9 +144,9 @@ impl State for NetworkSelectionState {
         
         // Instructions
         let instructions_spans = vec![
-            Span::styled("↑↓: Navigate | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("Enter: Select | ", Style::default().fg(Color::DarkGray)),
-            Span::styled("q: Quit", Style::default().fg(Color::DarkGray)),
+            Span::styled("↑↓: Navigate | ", Style::default().fg(Color::Red)),
+            Span::styled("Enter: Select | ", Style::default().fg(Color::Red)),
+            Span::styled("q: Quit", Style::default().fg(Color::Red)),
         ];
         
         frame.render_widget(
@@ -157,7 +156,7 @@ impl State for NetworkSelectionState {
         );
     }
     
-    fn handle_key(&self, key: KeyEvent, context: &mut AppContext) -> Option<StateType> {
+    fn handle_key(&mut self, key: KeyEvent, context: &mut AppContext) -> Option<StateType> {
         match key.code {
             KeyCode::Char('q') => Some(StateType::Quit),
             KeyCode::Down => {
