@@ -10,7 +10,7 @@
     "virtual_balance_server_url": "https://info-stage.hashira.io"
   },
   "localnet" : {
-    "evm_relayer_url": "http://127.0.0.1:4426/relayer",
+    "evm_relayer_url": "http://127.0.0.1:4426",
     "quote_server_url": "http://127.0.0.1:6969",
     "virtual_balance_server_url": "http://127.0.0.1:3008"
   }

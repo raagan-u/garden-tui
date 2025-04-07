@@ -3,25 +3,39 @@ use serde_json::Value;
 
 use super::types::{MatchedOrder, Order};
 
+#[derive(Clone)]
 pub struct Orderbook {
-    client: reqwest::Client,
+    client: reqwest::blocking::Client,
     url: String,
     api_key: String,
 }
 
 impl Orderbook {
-    pub fn new(client: reqwest::Client, url: String, api_key: String) -> Self {
+    pub fn new(client: reqwest::blocking::Client, url: String, api_key: String) -> Self {
         Self { client , url, api_key }
     }
 
-    pub async fn create_order(self, order : Order) -> Result<String> {
-        let url = format!("{}/create-order", self.url);
-        let resp = self.client.post(url).json(&order).send().await?;
-        let result = resp.json::<Value>().await?;
-        let create_id = result["result"].clone().to_string();
+    pub fn create_order(self, order: Order) -> Result<String> {
+        let url = format!("{}/relayer/create-order", self.url);
+        let resp = self.client
+            .post(url)
+            .header("api-key", self.api_key)
+            .json(&order)
+            .send()
+            .map_err(|e| anyhow!("failed to send create order request: {}", e))?;
+
+        let result = resp.json::<Value>()
+            .map_err(|e| anyhow!("failed to parse response as JSON: {}", e))?;
+        
+        
+        let create_id = result.get("result")
+            .ok_or_else(|| anyhow!("missing result field in response: {}", serde_json::to_string_pretty(&result).unwrap()))?
+            .clone()
+            .to_string();
+
         Ok(create_id)
     }
-    pub async fn initiate(self, order_id: &str, signature: &str) -> Result<String> {
+    pub fn initiate(self, order_id: &str, signature: &str) -> Result<String> {
         let url = format!("{}/initiate", self.url);
         let resp = self.client.post(url)
             .json(&serde_json::json!({
@@ -29,13 +43,12 @@ impl Orderbook {
                 "signature": signature, 
                 "perform_on": "Source"
             }))
-            .send()
-            .await?;
-        let result = resp.json::<Value>().await?;
+            .send()?;
+        let result = resp.json::<Value>()?;
         Ok(result.to_string())
     }
 
-    pub async fn redeem(self, order_id: &str, secret: &str) -> Result<String> {
+    pub fn redeem(self, order_id: &str, secret: &str) -> Result<String> {
         let url = format!("{}/redeem", self.url);
         let resp = self.client.post(url)
             .json(&serde_json::json!({
@@ -43,19 +56,17 @@ impl Orderbook {
                 "secret": secret,
                 "perform_on": "Destination"
             }))
-            .send()
-            .await?;
-        let result = resp.json::<Value>().await?;
+            .send()?;
+        let result = resp.json::<Value>()?;
         Ok(result.to_string())
     }
 
-    pub async fn get_matched_order(self, order_id: &str) -> Result<MatchedOrder> {
+    pub fn get_matched_order(self, order_id: &str) -> Result<MatchedOrder> {
         let url = format!("{}/orders/id/matched/{}", self.url, order_id);
         let resp = self.client.get(url)
-            .send()
-            .await?;
+            .send()?;
 
-        let response = resp.json::<Value>().await
+        let response = resp.json::<Value>()
             .map_err(|e| anyhow!("error getting matched order {}", e))?;
 
         // Extract the order from the nested response structure

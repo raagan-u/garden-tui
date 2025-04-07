@@ -1,8 +1,8 @@
 use std::error::Error;
 
-use alloy::{signers::{local::PrivateKeySigner, Signature}, sol_types::eip712_domain};
+use alloy::{hex::FromHex, primitives::U256, providers::{Provider, WalletProvider}, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain};
 use anyhow::{anyhow, Result};
-use bitcoin::{opcodes, Network, Script, ScriptBuf};
+use bitcoin::{hex::DisplayHex, opcodes, Network, Script, ScriptBuf};
 use rand::TryRngCore;
 use reqwest::Client;
 use serde::Deserialize;
@@ -12,6 +12,8 @@ use bitcoin::{
     absolute::LockTime, address::Address, consensus::encode::serialize_hex, key::{Keypair, Secp256k1}, secp256k1::Message, taproot::LeafVersion, transaction::Version, Amount, OutPoint, PrivateKey, Sequence, TapLeafHash, TapSighashType, Transaction, TxIn, TxOut, Txid, Witness
 };
 use bitcoin::sighash::SighashCache;
+
+use crate::{garden_api::types::{AlloyProvider, Initiate}, htlc};
 
 // use crate::garden_api::types::{AlloyProvider, Initiate};
 
@@ -105,12 +107,12 @@ pub fn instant_refund_leaf(initiator_pubkey: &str, redeemer_pubkey: &str) -> Res
 pub fn generate_secret() -> Result<([u8; 32], [u8; 32]), Box<dyn Error>> {
     let mut secret = [0u8; 32];
     
-    rand::rng().try_fill_bytes(&mut secret)?;
+    rand::rng().try_fill_bytes(&mut secret).unwrap();
     let mut hasher = Sha256::new();
     hasher.update(secret);
     let hash = hasher.finalize();
 
-    let hash_bytes = hex::decode(hash)?;
+    let hash_bytes = hex::decode(hash.to_lower_hex_string()).unwrap();
     let mut hash_array = [0u8; 32];
     hash_array.copy_from_slice(&hash_bytes);
     
@@ -267,58 +269,57 @@ pub fn sign_and_set_taproot_witness(
     Ok(tx)
 }
 
-// pub async fn get_signature_for_init(init_data: Initiate, provider: AlloyProvider, signer:  PrivateKeySigner) -> Signature {
-//     let chain = provider.get_chain_i.await.unwrap();
-//     let (addr, network) = if chain == 31337 {
-//         (
-//             "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-//             Network::,
-//         )
-//     } else if chain == 31338 {
-//         (
-//             "0165878A594ca255338adfa4d48449f69242Eb8F",
-//             Network::Arbitrum,
-//         )
-//     } else {
-//         panic!("chain not supported")
-//     };
-//     let htlc_contract = htlc::GardenHTLCContract::new(Address::from_hex(addr).unwrap(), provider.clone());
-//     let d = htlc_contract
-//         .eip712Domain()
-//         .call()
-//         .await.unwrap();
+pub async fn get_signature_for_init(init_data: Initiate, provider: AlloyProvider, signer:  PrivateKeySigner) -> Signature {
+    let chain = provider.get_chain_id().await.unwrap();
+    let (addr, network) = if chain == 31337 {
+            (
+                "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+                0,
+            )
+        } else if chain == 31338 {
+            (
+                "0165878A594ca255338adfa4d48449f69242Eb8F",
+                1,
+            )
+        } else {
+            panic!("chain not supported")
+        };
+    let htlc_contract = htlc::GardenHTLC::new(alloy::primitives::Address::from_hex(addr).unwrap(), provider.clone());
+    let d = htlc_contract
+        .eip712Domain()
+        .call()
+        .await.unwrap();
     
-//     let domain = eip712_domain! {
-//         name: d.name,
-//         version: d.version,
-//         chain_id: d.chainId.to(),
-//         verifying_contract: d.verifyingContract,
-//     };
+    let domain = eip712_domain! {
+        name: d.name,
+        version: d.version,
+        chain_id: d.chainId.to(),
+        verifying_contract: d.verifyingContract,
+    };
     
-//     let token_address = htlc_contract
-//         .token()
-//         .call()
-//         .await
-//         .expect("Failed to get token address")
-//         ._0;
+    let token_address = htlc_contract
+        .token()
+        .call()
+        .await
+        .expect("Failed to get token address")
+        ._0;
 
-//     println!("Token address: {:?}", token_address);
 
-//     let erc20 = htlc::ERC20Contract::new(token_address, provider.clone());
+    let erc20 = htlc::ERC20::new(token_address, provider.clone());
 
-//     println!("{}", erc20.address().to_string());
-//     let wallet_addr = Address::from_hex("0x6da99883352d5d3047e753667a62b06a78cd8e1c").unwrap();
-//     let balance = provider.get_balance(wallet_addr).await.unwrap();
-//     println!("Wallet balance: {}", balance);
+    println!("{}", erc20.address().to_string());
+    let wallet_addr = alloy::primitives::Address::from_hex("").unwrap();
+    let balance = provider.get_balance(wallet_addr).await.unwrap();
+    println!("Wallet balance: {}", balance);
 
-//     erc20
-//         .approve(*htlc_contract.address(), U256::MAX)
-//         .send()
-//         .await
-//         .unwrap()
-//         .watch()
-//         .await
-//         .unwrap();
-//     let sig = signer.sign_typed_data(&init_data, &domain).await.unwrap();
-//     sig
-// }
+    erc20
+        .approve(*htlc_contract.address(), U256::MAX)
+        .send()
+        .await
+        .unwrap()
+        .watch()
+        .await
+        .unwrap();
+    let sig = signer.sign_typed_data(&init_data, &domain).await.unwrap();
+    sig
+}

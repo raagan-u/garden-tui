@@ -1,4 +1,3 @@
-// src/states/network_selection.rs
 use ratatui::{
     Frame,
     widgets::{Block, Borders, List, ListItem, Paragraph},
@@ -70,12 +69,11 @@ impl NetworkSelectionState {
                                 );
                                 context.quote = Some(quote);
                                 
-                                let http_client = reqwest::Client::new();
                                 context.orderbook = Some(
                                     Orderbook::new(
                                         http_client.clone(),
                                         context.selected_network_urls.as_ref().unwrap().evm_relayer_url.clone(),
-                                        "".to_string()
+                                        "AAAAAGf0dUU6OrzQU7BpPstIUl24NGKtyr_-fMJJ2LvTpPN8cK9X624gNTAZ4fFL2U8MwMWDwR5lSZzHBkUzR31OVmWBxEVDZzAc".to_string()
                                 ));
                                 return Ok(());
                             }

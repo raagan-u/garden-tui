@@ -1,5 +1,5 @@
 pub mod bitcoin_htlc;
-mod utils;
+pub mod utils;
 
 alloy::sol!(
     #[sol(rpc)]

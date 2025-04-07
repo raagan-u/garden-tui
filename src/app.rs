@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{garden_api::{orderbook::Orderbook, quote::Quote, types::Order}, states::{
-    network_information::NetworkInformationState, network_selection::NetworkSelectionState, strategy_selector::StrategySelector, swap_information::SwapDashboardState, State, StateType
+    network_information::NetworkInformationState, network_selection::NetworkSelectionState, order_information::OrderDashboardState, strategy_selector::StrategySelector, swap_information::SwapDashboardState, State, StateType
 }};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -97,16 +97,46 @@ impl App {
                 StateType::NetworkInformation => {
                     self.state = Box::new(NetworkInformationState::new());
                 },
-                StateType::Swapinformation => {
+                StateType::SwapInformation => {
                   self.state = Box::new(SwapDashboardState::new());  
+                },
+                StateType::OrderInformation => {
+                  self.state = Box::new(OrderDashboardState::new());  
                 },
                 StateType::Quit => {
                     self.should_quit = true;
-                },
-                StateType::Exit(message) => {
-                    self.context.final_message = Some(message);
-                    self.should_quit = true;
-                },
+                }
+            }
+        }
+        
+        impl App {
+            // Keep all your existing methods
+            
+            // Add this new method to handle async key events
+            pub async fn handle_key_async(&mut self, key: KeyEvent) {
+                // Get the next state type from the current state's async handler
+                let next_state = self.state.handle_key_async(key, &mut self.context).await;
+                
+                // Handle state transitions
+                if let Some(state_type) = next_state {
+                    match state_type {
+                        StateType::NetworkSelection => {
+                            self.state = Box::new(NetworkSelectionState::new());
+                        },
+                        StateType::NetworkInformation => {
+                            self.state = Box::new(NetworkInformationState::new());
+                        },
+                        StateType::SwapInformation => {
+                            self.state = Box::new(SwapDashboardState::new());  
+                        },
+                        StateType::OrderInformation => {
+                            self.state = Box::new(OrderDashboardState::new());  
+                        },
+                        StateType::Quit => {
+                            self.should_quit = true;
+                        }
+                    }
+                }
             }
         }
     }

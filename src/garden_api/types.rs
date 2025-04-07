@@ -60,7 +60,7 @@ impl Order {
             fee: BigDecimal::from_u64(order_data.strategy.fee).unwrap(), 
             nonce: BigDecimal::from_u64(100).unwrap(), 
             min_destination_confirmations: 1, 
-            timelock: order_data.strategy.min_source_timelock, 
+            timelock: order_data.strategy.min_source_timelock+200, 
             secret_hash: order_data.secret_hash, 
             additional_data: AdditionalData { 
                 strategy_id: order_data.strategy.id, 
@@ -157,3 +157,28 @@ pub struct MatchedOrder {
     pub destination_swap: SingleSwap,
     pub create_order: Order,
 }
+
+use alloy::{
+    network::{Ethereum, EthereumWallet},
+    providers::{
+        fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller, WalletFiller},
+        Identity, RootProvider,
+    },
+    transports::http::Http,
+};
+use reqwest::Client;
+
+/// Provider type for contracts
+pub type AlloyProvider = alloy::providers::fillers::FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<EthereumWallet>,
+    >,
+    RootProvider<Http<reqwest::Client>>,
+    Http<Client>,
+    Ethereum,
+>;
+

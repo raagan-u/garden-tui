@@ -1,4 +1,3 @@
-// src/states/network_information.rs
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout}, style::{Color, Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph}, Frame
 };
@@ -196,7 +195,7 @@ impl State for NetworkInformationState {
                         context.current_strategy = Some(id.clone());
                     }
                 }
-                Some(StateType::Swapinformation)
+                Some(StateType::SwapInformation)
             },
             _ => None,
         }

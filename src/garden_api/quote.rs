@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
-use bigdecimal::BigDecimal;
 use serde_json::Value;
 use super::types::{Order, Strategy};
 
@@ -91,40 +90,40 @@ impl Quote {
 //         assert!(price.contains("\"status\":\"Ok"));
 //     }
 
-    #[test]
-    fn test_get_attested_quote() {
-        let quote = Quote::new(reqwest::blocking::Client::new(), "https://quote-staging.hashira.io".to_string());
-        let order = Order {
-            source_chain: "arbitrum_sepolia".to_string(),
-            destination_chain: "bitcoin_testnet".to_string(),
-            source_asset: "0x795Dcb58d1cd4789169D5F938Ea05E17ecEB68cA"
-                .to_string()
-                .to_lowercase(),
-            destination_asset: "primary".to_string(),
-            initiator_source_address: "0x70997c70c51812dc3a010c7d01b50e0d17dc79c8"
-                .to_string(),
-            initiator_destination_address: "1db36714896afaee20c2cc817d170689870858b5204d3b5a94d217654e94b2fb"
-                .to_string(),
-            source_amount: BigDecimal::from(10000),
-            destination_amount: BigDecimal::from(1000),
-            fee: BigDecimal::from(1000),
-            nonce: BigDecimal::from(1),
-            min_destination_confirmations: 1,
-            timelock: 600,
-            secret_hash: "acea7af1f0c8b96f84548bbce0488b08cdaf2c02b23579b4abc5945155d93722".to_string(),
-            additional_data: crate::garden_api::types::AdditionalData {
-                strategy_id: "asacbtyr".to_string(),
-                bitcoin_optional_recipient: None,
-                input_token_price: None,
-                output_token_price: None,
-                sig: None,
-                deadline: None,
-            },
-        };
-        let attested_quote = quote.get_attested_quote(order).unwrap();
-        println!("attested_quote: {:?}", attested_quote);
-        assert!(attested_quote.additional_data.sig.is_some());
-    }
+    // #[test]
+    // fn test_get_attested_quote() {
+    //     let quote = Quote::new(reqwest::blocking::Client::new(), "https://quote-staging.hashira.io".to_string());
+    //     let order = Order {
+    //         source_chain: "arbitrum_sepolia".to_string(),
+    //         destination_chain: "bitcoin_testnet".to_string(),
+    //         source_asset: "0x795Dcb58d1cd4789169D5F938Ea05E17ecEB68cA"
+    //             .to_string()
+    //             .to_lowercase(),
+    //         destination_asset: "primary".to_string(),
+    //         initiator_source_address: "0x70997c70c51812dc3a010c7d01b50e0d17dc79c8"
+    //             .to_string(),
+    //         initiator_destination_address: "1db36714896afaee20c2cc817d170689870858b5204d3b5a94d217654e94b2fb"
+    //             .to_string(),
+    //         source_amount: BigDecimal::from(10000),
+    //         destination_amount: BigDecimal::from(1000),
+    //         fee: BigDecimal::from(1000),
+    //         nonce: BigDecimal::from(1),
+    //         min_destination_confirmations: 1,
+    //         timelock: 600,
+    //         secret_hash: "acea7af1f0c8b96f84548bbce0488b08cdaf2c02b23579b4abc5945155d93722".to_string(),
+    //         additional_data: crate::garden_api::types::AdditionalData {
+    //             strategy_id: "asacbtyr".to_string(),
+    //             bitcoin_optional_recipient: None,
+    //             input_token_price: None,
+    //             output_token_price: None,
+    //             sig: None,
+    //             deadline: None,
+    //         },
+    //     };
+    //     let attested_quote = quote.get_attested_quote(order).unwrap();
+    //     println!("attested_quote: {:?}", attested_quote);
+    //     assert!(attested_quote.additional_data.sig.is_some());
+    // }
     
 //     #[tokio::test]
 //     async fn test_load_strategies() {

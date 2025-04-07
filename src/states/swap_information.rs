@@ -1,13 +1,20 @@
+use std::error::Error;
+
+use bitcoin::hex::DisplayHex;
 use crossterm::event::{KeyEvent, KeyCode};
+use rand::TryRngCore;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::prelude::*;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::app::AppContext;
 use crate::garden_api::types::Order;
 use crate::garden_api::types::OrderInputData;
+use crate::htlc;
 
 use super::{State, StateType};
 
@@ -148,19 +155,19 @@ impl State for SwapDashboardState {
                 self.toggle_input_focus();
                 None
             },
-            KeyCode::Char('g') => {
+            KeyCode::Char('s') => {
                 if let (Some(quote), Some(current_strategy)) = (&context.quote, &context.current_strategy) {
                     if let Some(strategy) = quote.strategies_map.as_ref()
                         .and_then(|map| map.get(current_strategy).cloned()) {
 
                         let in_amount = self.input_value.parse::<u64>().unwrap();
                         let out_amount = self.quote_price.parse::<u64>().unwrap();
-
+                        let (secret, secret_hash) = htlc::utils::generate_secret().unwrap();
                         let _order = Order::new(OrderInputData{
                             initiator_source_address: context.signer.address().to_string(),
                             in_amount,
                             out_amount, 
-                            secret_hash: "a8c26c709cc11d0102f245bc8d868e71490adcf04c810ae9550a5da03cf94139".to_string(),
+                            secret_hash: hex::encode(secret_hash),
                             strategy,
                             btc_opt_recepient: None
                         });
@@ -169,9 +176,8 @@ impl State for SwapDashboardState {
                         context.current_order = Some(attested_order);
                     }
                 }
-                None
+                Some(StateType::OrderInformation)
             },
-            KeyCode::Char('s') => None,
             KeyCode::Char(c) => {
                 if c.is_ascii_digit(){
                     self.handle_input(c);
