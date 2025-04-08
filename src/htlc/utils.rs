@@ -19,6 +19,7 @@ use crate::{garden_api::types::{AlloyProvider, Initiate}, htlc};
 
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct UTXO {
     pub txid: String,
     pub vout: u32,
@@ -27,6 +28,7 @@ pub struct UTXO {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct Status {
     pub confirmed: bool,
     pub block_height: u64,
@@ -269,22 +271,8 @@ pub fn sign_and_set_taproot_witness(
     Ok(tx)
 }
 
-pub async fn get_signature_for_init(init_data: Initiate, provider: AlloyProvider, signer:  PrivateKeySigner) -> Signature {
-    let chain = provider.get_chain_id().await.unwrap();
-    let (addr, network) = if chain == 31337 {
-            (
-                "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-                0,
-            )
-        } else if chain == 31338 {
-            (
-                "0165878A594ca255338adfa4d48449f69242Eb8F",
-                1,
-            )
-        } else {
-            panic!("chain not supported")
-        };
-    let htlc_contract = htlc::GardenHTLC::new(alloy::primitives::Address::from_hex(addr).unwrap(), provider.clone());
+pub async fn init_and_get_sig(init_data: Initiate, provider: AlloyProvider, signer:  PrivateKeySigner, token_address: &str) -> Signature {
+    let htlc_contract = htlc::GardenHTLC::new(alloy::primitives::Address::from_hex(token_address).unwrap(), provider.clone());
     let d = htlc_contract
         .eip712Domain()
         .call()
@@ -307,10 +295,7 @@ pub async fn get_signature_for_init(init_data: Initiate, provider: AlloyProvider
 
     let erc20 = htlc::ERC20::new(token_address, provider.clone());
 
-    println!("{}", erc20.address().to_string());
-    let wallet_addr = alloy::primitives::Address::from_hex("").unwrap();
-    let balance = provider.get_balance(wallet_addr).await.unwrap();
-    println!("Wallet balance: {}", balance);
+
 
     erc20
         .approve(*htlc_contract.address(), U256::MAX)

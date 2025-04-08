@@ -73,7 +73,7 @@ impl NetworkSelectionState {
                                     Orderbook::new(
                                         http_client.clone(),
                                         context.selected_network_urls.as_ref().unwrap().evm_relayer_url.clone(),
-                                        "AAAAAGf0dUU6OrzQU7BpPstIUl24NGKtyr_-fMJJ2LvTpPN8cK9X624gNTAZ4fFL2U8MwMWDwR5lSZzHBkUzR31OVmWBxEVDZzAc".to_string()
+                                        "ACOG8te1sEI6OrR_HNqSL_Y7_JzOZTqYIKVk3wqjxCjH8G_3uLOIlnntJPJXQEJqwmFQuuA_g7FqQhNZBPtFPEflQKazrDK7_24c".to_string()
                                 ));
                                 return Ok(());
                             }

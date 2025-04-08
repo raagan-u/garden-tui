@@ -39,6 +39,7 @@ pub struct Order {
 
 pub struct OrderInputData {
     pub initiator_source_address: String,
+    pub initiator_dest_address: String,
     pub in_amount: u64,
     pub out_amount: u64,
     pub secret_hash: String,
@@ -54,7 +55,7 @@ impl Order {
             source_asset: order_data.strategy.source_asset.asset, 
             destination_asset: order_data.strategy.dest_asset.asset, 
             initiator_source_address: order_data.initiator_source_address, 
-            initiator_destination_address: order_data.strategy.dest_chain_address, 
+            initiator_destination_address: order_data.initiator_dest_address, 
             source_amount: BigDecimal::from_u64(order_data.in_amount).unwrap(), 
             destination_amount: BigDecimal::from_u64(order_data.out_amount).unwrap(), 
             fee: BigDecimal::from_u64(order_data.strategy.fee).unwrap(), 
@@ -110,7 +111,7 @@ alloy::sol! {
 
 impl Order {
     pub fn to_sol_initiate(&self, redeemer_addr: &str) -> Initiate {
-        let redeemer = Address::from_hex(redeemer_addr).unwrap();
+        let redeemer = Address::from_hex(&redeemer_addr).unwrap();
         let time_lock = Uint::from(self.timelock);
         let amt = Uint::from_str(self.source_amount.to_string().as_str()).unwrap();
         let secret_hashbytes = FixedBytes::from_hex(self.secret_hash.clone()).unwrap();
@@ -121,6 +122,14 @@ impl Order {
             secretHash: secret_hashbytes,
         }
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+/// Request to initiate a swap with a signature
+pub struct InitiateRequest {
+    pub order_id: String,
+    pub signature: String,
+    pub perform_on: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

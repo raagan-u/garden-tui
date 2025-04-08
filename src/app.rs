@@ -1,6 +1,7 @@
 // src/app.rs
 use std::{fs::File, io::Read, str::FromStr};
 use alloy::{network::EthereumWallet, signers::{k256::ecdsa::SigningKey, local::{LocalSigner, PrivateKeySigner}}};
+use bitcoin::{key::Secp256k1, PublicKey};
 use ratatui::{
     Frame, 
     widgets::ListState
@@ -32,8 +33,10 @@ pub struct AppContext {
     pub current_strategy: Option<String>,
     pub strategy_selector: Option<StrategySelector>,
     pub current_order: Option<Order>,
+    pub secret: [u8; 32],
     pub eth_wallet: EthereumWallet,
-    pub signer: LocalSigner<SigningKey>
+    pub signer: LocalSigner<SigningKey>,
+    pub _btc_pubkey: bitcoin::XOnlyPublicKey
 }
 
 pub struct App {
@@ -43,11 +46,17 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(eth_priv_key: &str) -> App {
+    pub fn new(priv_key: &str) -> App {
         let mut network_list_state = ListState::default();
         network_list_state.select(Some(0));
         
-        let signer = PrivateKeySigner::from_str(eth_priv_key).unwrap();
+        let signer = PrivateKeySigner::from_str(priv_key).unwrap();
+        let priv_key_bytes = hex::decode(priv_key).unwrap();
+        let sk = bitcoin::PrivateKey::from_slice(&priv_key_bytes, bitcoin::Network::Regtest).unwrap();
+        let secp = Secp256k1::new();
+        
+        let (btc_pubkey, _) = PublicKey::from_private_key(&secp, &sk).inner.x_only_public_key();
+        
         let context = AppContext {
             network_list_state,
             networks: vec!["Mainnet", "Testnet", "Localnet"],
@@ -61,7 +70,9 @@ impl App {
             strategy_selector: None,
             current_order: None,
             eth_wallet: EthereumWallet::from(signer.clone()),
-            signer: signer.clone()
+            signer: signer.clone(),
+            secret: [0; 32],
+            _btc_pubkey: btc_pubkey
         };
         
         App {
@@ -105,37 +116,6 @@ impl App {
                 },
                 StateType::Quit => {
                     self.should_quit = true;
-                }
-            }
-        }
-        
-        impl App {
-            // Keep all your existing methods
-            
-            // Add this new method to handle async key events
-            pub async fn handle_key_async(&mut self, key: KeyEvent) {
-                // Get the next state type from the current state's async handler
-                let next_state = self.state.handle_key_async(key, &mut self.context).await;
-                
-                // Handle state transitions
-                if let Some(state_type) = next_state {
-                    match state_type {
-                        StateType::NetworkSelection => {
-                            self.state = Box::new(NetworkSelectionState::new());
-                        },
-                        StateType::NetworkInformation => {
-                            self.state = Box::new(NetworkInformationState::new());
-                        },
-                        StateType::SwapInformation => {
-                            self.state = Box::new(SwapDashboardState::new());  
-                        },
-                        StateType::OrderInformation => {
-                            self.state = Box::new(OrderDashboardState::new());  
-                        },
-                        StateType::Quit => {
-                            self.should_quit = true;
-                        }
-                    }
                 }
             }
         }

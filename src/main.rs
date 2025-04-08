@@ -18,7 +18,7 @@ mod states;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let eth_priv_key = env::var("ETH_PRIV_KEY").expect("please provide a valid ETH_PRIV_KEY in env");
+    let eth_priv_key = env::var("PRIV_KEY").expect("please provide a valid PRIV_KEY in env");
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();

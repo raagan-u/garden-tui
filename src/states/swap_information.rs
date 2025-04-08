@@ -1,15 +1,9 @@
-use std::error::Error;
-
-use bitcoin::hex::DisplayHex;
 use crossterm::event::{KeyEvent, KeyCode};
-use rand::TryRngCore;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::prelude::*;
-use sha2::Digest;
-use sha2::Sha256;
 
 use crate::app::AppContext;
 use crate::garden_api::types::Order;
@@ -85,7 +79,7 @@ impl State for SwapDashboardState {
             .direction(Direction::Vertical)
             .margin(2)
             .constraints([
-                Constraint::Length(3),  // Title
+                Constraint::Length(3),
                 Constraint::Length(1),
                 Constraint::Length(3),
                 Constraint::Length(3),
@@ -162,9 +156,15 @@ impl State for SwapDashboardState {
 
                         let in_amount = self.input_value.parse::<u64>().unwrap();
                         let out_amount = self.quote_price.parse::<u64>().unwrap();
+                        let init_src_add = if strategy.source_chain.contains("bitcoin") {
+                            context._btc_pubkey.to_string()
+                        } else {
+                            context.signer.address().to_string()
+                        };
                         let (secret, secret_hash) = htlc::utils::generate_secret().unwrap();
                         let _order = Order::new(OrderInputData{
-                            initiator_source_address: context.signer.address().to_string(),
+                            initiator_source_address: init_src_add,
+                            initiator_dest_address: context.signer.clone().address().to_string(),
                             in_amount,
                             out_amount, 
                             secret_hash: hex::encode(secret_hash),
@@ -174,6 +174,7 @@ impl State for SwapDashboardState {
                         
                         let attested_order = quote.get_attested_quote(_order).expect("error getting attested quote");
                         context.current_order = Some(attested_order);
+                        context.secret = secret
                     }
                 }
                 Some(StateType::OrderInformation)
