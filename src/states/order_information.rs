@@ -98,8 +98,12 @@ impl OrderDashboardState {
             }
         };
         
-        
-        let provider_url = match Url::from_str("http://localhost:8546") {
+        let url_str = match strategy_info.source_chain.as_str() {
+            "arbitrum_localnet" => "http://localhost:8546",
+            "ethereum_localnet" => "http://localhost:8545",
+            _ => ""
+        };
+        let provider_url = match Url::from_str(url_str) {
             Ok(url) => url,
             Err(e) => {
                 self.set_status(format!("Invalid provider URL: {}", e));
