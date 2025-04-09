@@ -130,6 +130,7 @@ impl State for SwapDashboardState {
         let instructions_spans = vec![
             Span::styled("q: Quit | ", Style::default().fg(Color::Red)),
             Span::styled("b: Strategy Selection | ", Style::default().fg(Color::Red)),
+            Span::styled("g: Get Quote | ", Style::default().fg(Color::Red)),
             Span::styled("s: SWAP | ", Style::default().fg(Color::Green)),
             Span::styled("i: Toggle Input Focus", Style::default().fg(Color::Red)),
         ];
@@ -150,26 +151,32 @@ impl State for SwapDashboardState {
                 None
             },
             KeyCode::Char('s') => {
+                if self.quote_price.is_empty() || self.input_value.is_empty(){
+                    self.quote_price = "please ensure to get quote price".to_string();
+                    return None
+                }
                 if let (Some(quote), Some(current_strategy)) = (&context.quote, &context.current_strategy) {
                     if let Some(strategy) = quote.strategies_map.as_ref()
                         .and_then(|map| map.get(current_strategy).cloned()) {
 
                         let in_amount = self.input_value.parse::<u64>().unwrap();
                         let out_amount = self.quote_price.parse::<u64>().unwrap();
-                        let init_src_add = if strategy.source_chain.contains("bitcoin") {
-                            context._btc_pubkey.to_string()
+                        let (init_src_add, init_dest_addr, btc_opt_recp ) = if strategy.source_chain.contains("bitcoin") {
+                            (context._btc_pubkey.to_string(), context.signer.address().to_string(), None)
+                        } else if strategy.dest_chain.contains("bitcoin") {
+                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some("bcrt1pw5r6ev6s23uz0sldylfzzyt0aq9guphns85mpudgj57ceu5s7a8sv8ruvr".to_string()))
                         } else {
-                            context.signer.address().to_string()
+                            (context.signer.address().to_string(), context.signer.address().to_string(), None)
                         };
                         let (secret, secret_hash) = htlc::utils::generate_secret().unwrap();
                         let _order = Order::new(OrderInputData{
                             initiator_source_address: init_src_add,
-                            initiator_dest_address: context.signer.clone().address().to_string(),
+                            initiator_dest_address: init_dest_addr,
                             in_amount,
                             out_amount, 
                             secret_hash: hex::encode(secret_hash),
                             strategy,
-                            btc_opt_recepient: None
+                            btc_opt_recepient: btc_opt_recp
                         });
                         
                         let attested_order = quote.get_attested_quote(_order).expect("error getting attested quote");
@@ -179,13 +186,11 @@ impl State for SwapDashboardState {
                 }
                 Some(StateType::OrderInformation)
             },
-            KeyCode::Char(c) => {
-                if c.is_ascii_digit(){
-                    self.handle_input(c);
+            KeyCode::Char('g') => {
+                if self.quote_price.is_empty(){
+                    self.quote_price = "please enter a valid input amount".to_string();
+                    return None
                 }
-                None
-            },
-            KeyCode::Enter => {
                 if let (Some(quote), Some(strategy)) = (&context.quote, &context.current_strategy) {
                     if let Ok(order_pair) = quote.strategy_to_order_pair(strategy) {
                         if let Ok(price) = quote.get_price(&order_pair, &self.input_value) {
@@ -195,6 +200,12 @@ impl State for SwapDashboardState {
                 }
                 None
             }
+            KeyCode::Char(c) => {
+                if c.is_ascii_digit(){
+                    self.handle_input(c);
+                }
+                None
+            },
             KeyCode::Backspace => {
                 self.handle_backspace();
                 None

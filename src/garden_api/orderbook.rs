@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde_json::Value;
 
+
 use super::types::{InitiateRequest, MatchedOrder, Order};
 
 #[derive(Clone)]
@@ -79,6 +80,18 @@ impl Orderbook {
         Ok(result.to_string())
     }
 
+    pub fn btc_redeem(&self, order_id: &str, tx_hex: &str) -> Result<String> {
+        let url = format!("{}/gasless/order/bitcoin/redeem", self.url);
+        let resp = self.client.post(url).header("api-key", &self.api_key)
+            .json(&serde_json::json!({
+                "order_id": order_id,
+                "redeem_tx_bytes": tx_hex
+            }))
+            .send()?;
+        let result = resp.json::<Value>()?;
+        Ok(result.to_string())
+    }
+    
     pub fn get_matched_order(&self, order_id: &str) -> Result<MatchedOrder> {
         let url = format!("{}/orders/id/matched/{}", self.url, order_id);
         let resp = self.client

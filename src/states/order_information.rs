@@ -1,8 +1,10 @@
+use std::env;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 
 use alloy::providers::ProviderBuilder;
+use bitcoin::consensus::encode::serialize_hex;
 use crossterm::event::{KeyEvent, KeyCode};
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
@@ -13,13 +15,26 @@ use reqwest::Url;
 
 use crate::app::AppContext;
 use crate::garden_api::types::InitiateRequest;
+use crate::htlc::bitcoin_htlc::BitcoinHTLC;
+use crate::htlc::utils::create_tx;
 use crate::htlc::utils::init_and_get_sig;
+use crate::htlc::utils::pay_to_htlc;
 
 use super::{State, StateType};
+
+pub enum OrderProgress {
+    NotStarted,
+    OrderCreated,
+    Initialized,
+    DestinationInitialized,
+    Redeemed,
+    Failed(String)
+}
 
 pub struct OrderDashboardState {
     pub order_id: String,
     pub status: Option<String>,
+     pub progress: OrderProgress,
 }
 
 impl OrderDashboardState {
@@ -27,6 +42,7 @@ impl OrderDashboardState {
         OrderDashboardState {
             order_id: "Press 's' to create-order".to_string(),
             status: None,
+            progress: OrderProgress::NotStarted,
         }
     }
 
@@ -125,6 +141,15 @@ impl OrderDashboardState {
         
         tx
     }
+    
+    fn init_for_btc(&self, context: &mut AppContext) -> Option<String> {
+        let swap = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap().source_swap;
+        let secret_hash = hex::decode(swap.secret_hash).unwrap();
+        let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, bitcoin::Network::Regtest).unwrap();
+        let priv_key_hex = env::var("PRIV_KEY").unwrap();
+        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap()).unwrap();
+        Some(tx)
+    }
 }
 
 impl State for OrderDashboardState {
@@ -215,54 +240,141 @@ impl State for OrderDashboardState {
                 // Clear any previous errors
                 self.clear_error();
                 
-                // Create order with proper error handling
-                let order_result = match &context.orderbook {
-                    Some(orderbook) => {
-                        match &context.current_order {
-                            Some(order) => orderbook.clone().create_order(order.clone()),
+                match self.progress {
+                    OrderProgress::NotStarted => {
+                        // Create order
+                        let order_result = match &context.orderbook {
+                            Some(orderbook) => {
+                                match &context.current_order {
+                                    Some(order) => orderbook.clone().create_order(order.clone()),
+                                    None => {
+                                        self.set_status("No current order available".to_string());
+                                        return None;
+                                    }
+                                }
+                            },
                             None => {
-                                self.set_status("No current order available".to_string());
+                                self.set_status("Orderbook not initialized".to_string());
                                 return None;
+                            }
+                        };
+                        
+                        // Check if order creation was successful
+                        match order_result {
+                            Ok(order_id) => {
+                                self.order_id = order_id.trim_matches('"').to_string();
+                                self.set_status("Order Created. Press 's' to initialize".to_string());
+                                self.progress = OrderProgress::OrderCreated;
+                                sleep(Duration::from_secs(5));
+                            },
+                            Err(e) => {
+                                self.set_status(format!("Failed to create order: {}", e));
+                                self.progress = OrderProgress::Failed(e.to_string());
                             }
                         }
                     },
-                    None => {
-                        self.set_status("Orderbook not initialized".to_string());
-                        return None;
-                    }
-                };
-                
-                // Check if order creation was successful
-                match order_result {
-                    Ok(order_id) => {
-                        self.order_id = order_id.trim_matches('"').to_string();
-                        self.set_status("Order Creation Successful".to_string());
-                        let timeout_duration = Duration::from_secs(10);
-                        sleep(timeout_duration);
+                    OrderProgress::OrderCreated => {
+                        // Initialize
+                        if !context.current_strategy.as_ref().unwrap().starts_with("b") {
+                            match self.init_for_evm(context) {
+                                Some(tx) => {
+                                    self.set_status(format!("Initialized. tx {} Press 's' to wait for destination", tx));
+                                    self.progress = OrderProgress::Initialized;
+                                },
+                                None => {
+                                    // Error already set in init_for_evm
+                                    self.progress = OrderProgress::Failed("Initialization failed".to_string());
+                                }
+                            }
+                        } else {
+                            match context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id) {
+                                Ok(_) => {
+                                    let tx = self.init_for_btc(context).unwrap();
+                                    self.set_status(format!("Initialized. tx {} Press 's' to wait for destination", tx));
+                                    self.progress = OrderProgress::Initialized;
+                                },
+                                Err(e) => {
+                                    self.set_status(format!("Failed to get matched order: {}", e));
+                                    self.progress = OrderProgress::Failed(e.to_string());
+                                }
+                            }
+                        }
                     },
-                    Err(e) => {
-                        self.set_status(format!("Failed to create order: {}", e));
+                    OrderProgress::Initialized => {
+                        // Wait for destination init
+                        self.set_status("Waiting for destination init...".to_string());
+                        match context.orderbook.as_mut().unwrap().wait_for_destination_init(&self.order_id) {
+                            Ok(_) => {
+                                self.set_status("Destination initialized. Press 's' to redeem".to_string());
+                                self.progress = OrderProgress::DestinationInitialized;
+                            },
+                            Err(e) => {
+                                self.set_status(format!("Failed waiting for destination: {}", e));
+                                self.progress = OrderProgress::Failed(e.to_string());
+                            }
+                        }
+                    },
+                    OrderProgress::DestinationInitialized => {
+                        // Redeem
+                        let secret_str = hex::encode(context.secret);
+                        if context.current_order.as_ref().unwrap().destination_chain.contains("bitcoin") {
+                            let swap = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap().destination_swap;
+                            let secret_hash = hex::decode(swap.secret_hash).unwrap();
+                            let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, bitcoin::Network::Regtest).unwrap();
+                            let witness_stack = htlc.redeem(&context.secret.to_vec()).unwrap();
+                            let priv_key = env::var("PRIV_KEY").unwrap();
+                            let runtime = match tokio::runtime::Runtime::new() {
+                                Ok(r) => r,
+                                Err(e) => {
+                                    self.set_status(format!("Failed to create runtime: {}", e));
+                                    return None;
+                                }
+                            };
+                            
+                            let tx = runtime.block_on(create_tx(htlc.address().unwrap(), witness_stack, "bcrt1pw5r6ev6s23uz0sldylfzzyt0aq9guphns85mpudgj57ceu5s7a8sv8ruvr", &priv_key)).unwrap();
+                            let tx_hex = serialize_hex(&tx);
+                            match context.orderbook.as_mut().unwrap().btc_redeem(&self.order_id, &tx_hex) {
+                                Ok(tx) if !tx.is_empty() => {
+                                    self.set_status(format!("Redeem Successful!! {} ", tx));
+                                    self.progress = OrderProgress::Redeemed;
+                                },
+                                Ok(_) => {
+                                    self.set_status("Redeem returned empty transaction".to_string());
+                                    self.progress = OrderProgress::Failed("Empty transaction".to_string());
+                                },
+                                Err(e) => {
+                                    self.set_status(format!("Redeem failed: {}", e));
+                                    self.progress = OrderProgress::Failed(e.to_string());
+                                }
+                            }
+                            
+                            
+                        } else {
+                            match context.orderbook.as_mut().unwrap().redeem(&self.order_id, &secret_str) {
+                                Ok(tx) if !tx.is_empty() => {
+                                    self.set_status(format!("Redeem Successful!! {} ", tx));
+                                    self.progress = OrderProgress::Redeemed;
+                                },
+                                Ok(_) => {
+                                    self.set_status("Redeem returned empty transaction".to_string());
+                                    self.progress = OrderProgress::Failed("Empty transaction".to_string());
+                                },
+                                Err(e) => {
+                                    self.set_status(format!("Redeem failed: {}", e));
+                                    self.progress = OrderProgress::Failed(e.to_string());
+                                }
+                            }
+                        }
+                    },
+                    OrderProgress::Redeemed => {
+                        // Already complete
+                        self.set_status("Order process complete! Press 'c' to start over.".to_string());
+                    },
+                    OrderProgress::Failed(ref reason) => {
+                        self.set_status(format!("Process failed: {}. Press 'c' to retry.", reason));
                     }
                 }
-                
-                if !context.current_strategy.as_ref().unwrap().starts_with("b") {
-                    self.init_for_evm(context);
-                    self.set_status("Init Successful".to_string());
-                } else {
-                    let get_matched_order = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap();
-                    eprintln!("pay to this htlc addr {:#?} ", get_matched_order.source_swap.swap_id);
-                }
-                
-                let _ = context.orderbook.as_mut().unwrap().wait_for_destination_init(&self.order_id).unwrap();
-                let secret_str = hex::encode(context.secret);
-                let redeem_tx = context.orderbook.as_mut().unwrap().redeem(&self.order_id, &secret_str).unwrap_or("".to_string());
-                if !redeem_tx.is_empty() {
-                    self.set_status("Redeem Successful".to_string());
-                    return None
-                } else {
-                    self.set_status("Redeem Unsuccessful".to_string());
-                    return None
-                }
+                None
             },
             KeyCode::Enter => None,
             KeyCode::Backspace => None,
