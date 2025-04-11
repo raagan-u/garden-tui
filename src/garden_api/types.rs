@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use alloy::{hex::FromHex, primitives::{Address, FixedBytes, Uint}};
 use bigdecimal::{BigDecimal, FromPrimitive};
@@ -98,6 +98,21 @@ pub struct Strategy {
     pub min_source_confirmations: u64,
     pub min_price: f64,
     pub fee: u64, // in bips
+}
+impl Display for Strategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "id: {} \n {} to {} \n order_pair {}:{}::{}:{}\n",
+            self.id,
+            self.source_chain,
+            self.dest_chain,
+            self.source_chain,
+            self.source_asset.asset,
+            self.dest_chain,
+            self.dest_asset.asset
+        )
+    }
 }
 
 alloy::sol! {

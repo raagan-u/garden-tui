@@ -1,17 +1,14 @@
 {
-  "mainnet" : {
+  "mainnet": {
     "evm_relayer_url": "",
-    "quote_server_url": "",
-    "virtual_balance_server_url": ""
+    "quote_server_url": ""
   },
-  "testnet" : {
+  "testnet": {
     "evm_relayer_url": "https://orderbook-stage.hashira.io",
-    "quote_server_url": "https://quote-staging.hashira.io",
-    "virtual_balance_server_url": "https://info-stage.hashira.io"
+    "quote_server_url": "https://quote-staging.hashira.io"
   },
-  "localnet" : {
+  "localnet": {
     "evm_relayer_url": "http://127.0.0.1:4426",
-    "quote_server_url": "http://127.0.0.1:6969",
-    "virtual_balance_server_url": "http://127.0.0.1:3008"
-  }
+    "quote_server_url": "http://127.0.0.1:6969"
+  },
 }

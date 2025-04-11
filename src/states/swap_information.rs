@@ -121,9 +121,8 @@ impl State for SwapDashboardState {
         );
             
         if self.input_focused {
-            frame.set_cursor(
-                chunks[2].x + 1 + self.input_value.len() as u16,
-                chunks[2].y + 1,
+            frame.set_cursor_position(
+                Position::new(chunks[2].x + 1 + self.input_value.len() as u16, chunks[2].y + 1)
             );
         }
             
@@ -156,9 +155,7 @@ impl State for SwapDashboardState {
                     return None
                 }
                 if let (Some(quote), Some(current_strategy)) = (&context.quote, &context.current_strategy) {
-                    if let Some(strategy) = quote.strategies_map.as_ref()
-                        .and_then(|map| map.get(current_strategy).cloned()) {
-
+                    if let Some(strategy) = quote.strategies_map.get(current_strategy) {
                         let in_amount = self.input_value.parse::<u64>().unwrap();
                         let out_amount = self.quote_price.parse::<u64>().unwrap();
                         let (init_src_add, init_dest_addr, btc_opt_recp ) = if strategy.source_chain.contains("bitcoin") {
@@ -175,7 +172,7 @@ impl State for SwapDashboardState {
                             in_amount,
                             out_amount, 
                             secret_hash: hex::encode(secret_hash),
-                            strategy,
+                            strategy: strategy.clone(),
                             btc_opt_recepient: btc_opt_recp
                         });
                         
@@ -187,15 +184,20 @@ impl State for SwapDashboardState {
                 Some(StateType::OrderInformation)
             },
             KeyCode::Char('g') => {
-                if self.quote_price.is_empty(){
+                if self.input_value.is_empty(){
                     self.quote_price = "please enter a valid input amount".to_string();
                     return None
                 }
                 if let (Some(quote), Some(strategy)) = (&context.quote, &context.current_strategy) {
-                    if let Ok(order_pair) = quote.strategy_to_order_pair(strategy) {
-                        if let Ok(price) = quote.get_price(&order_pair, &self.input_value) {
-                            self.quote_price = price.trim_matches('"').to_string();
-                        }
+                    let details = match quote.strategies_map.get(strategy) {
+                        Some(details) => details,
+                        None => return None,
+                    };
+                   
+                    let order_pair = format!("{}:{}::{}:{}", details.source_chain, details.source_asset.asset, details.dest_chain, details.dest_asset.asset);
+                    if let Ok(price) = quote.get_price(&order_pair, &self.input_value) {
+                        self.quote_price = price.trim_matches('"').to_string();
+                        return None
                     }
                 }
                 None

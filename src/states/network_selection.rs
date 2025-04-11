@@ -55,28 +55,25 @@ impl NetworkSelectionState {
                     // Parse the network config object
                     if let Some(evm_url) = network_config.get("evm_relayer_url").and_then(|v| v.as_str()) {
                         if let Some(quote_url) = network_config.get("quote_server_url").and_then(|v| v.as_str()) {
-                            if let Some(vb_url) = network_config.get("virtual_balance_server_url").and_then(|v| v.as_str()) {
                                 context.selected_network_urls = Some(crate::app::NetworkUrls {
                                     evm_relayer_url: evm_url.to_string(),
                                     quote_server_url: quote_url.to_string(),
-                                    virtual_balance_server_url: vb_url.to_string(),
                                 });
                                 
                                 let http_client = reqwest::blocking::Client::new();
                                 let quote = Quote::new(
                                     http_client.clone(),
                                     quote_url.to_string()
-                                );
+                                )?;
                                 context.quote = Some(quote);
                                 
                                 context.orderbook = Some(
                                     Orderbook::new(
                                         http_client.clone(),
-                                        context.selected_network_urls.as_ref().unwrap().evm_relayer_url.clone(),
-                                        "ACOG8te1sEI6OrR_HNqSL_Y7_JzOZTqYIKVk3wqjxCjH8G_3uLOIlnntJPJXQEJqwmFQuuA_g7FqQhNZBPtFPEflQKazrDK7_24c".to_string()
+                                        &context.selected_network_urls.as_ref().unwrap().evm_relayer_url.clone(),
+                                        context.signer.clone()
                                 ));
                                 return Ok(());
-                            }
                         }
                     }
                 }
@@ -169,7 +166,6 @@ impl State for NetworkSelectionState {
                 match Self::select_network(context) {
                     Ok(_) => Some(StateType::NetworkInformation),
                     Err(e) => {
-                        // Handle error (in a real app, you might want to show this in the UI)
                         eprintln!("Error: {}", e);
                         None
                     }

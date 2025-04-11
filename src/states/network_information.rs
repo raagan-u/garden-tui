@@ -88,15 +88,10 @@ impl State for NetworkInformationState {
             
             // Check and initialize strategy selector
             if context.strategy_selector.is_none() {
-                quote.load_strategies().unwrap();
-                if let Some(strategies) = quote.strategies_map.as_ref() {
-                    if !strategies.is_empty() {
-                        context.strategy_selector = Some(StrategySelector::new(strategies));
-                    } else {
-                        eprintln!("Strategies map is empty");
-                    }
+                if !quote.strategies_map.is_empty() {
+                    context.strategy_selector = Some(StrategySelector::new(&quote.strategies_map));
                 } else {
-                    eprintln!("Strategies map is None");
+                    eprintln!("Strategies map is empty");
                 }
             }
             

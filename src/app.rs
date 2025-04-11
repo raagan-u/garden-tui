@@ -1,6 +1,6 @@
 // src/app.rs
 use std::{fs::File, io::Read, str::FromStr};
-use alloy::{network::EthereumWallet, signers::{k256::ecdsa::SigningKey, local::{LocalSigner, PrivateKeySigner}}};
+use alloy::signers::{k256::ecdsa::SigningKey, local::{LocalSigner, PrivateKeySigner}};
 use bitcoin::{key::Secp256k1, PublicKey};
 use ratatui::{
     Frame, 
@@ -18,7 +18,6 @@ use crate::{garden_api::{orderbook::Orderbook, quote::Quote, types::Order}, stat
 pub struct NetworkUrls {
     pub evm_relayer_url: String,
     pub quote_server_url: String,
-    pub virtual_balance_server_url: String,
 }
 
 pub struct AppContext {
@@ -34,7 +33,6 @@ pub struct AppContext {
     pub strategy_selector: Option<StrategySelector>,
     pub current_order: Option<Order>,
     pub secret: [u8; 32],
-    pub eth_wallet: EthereumWallet,
     pub signer: LocalSigner<SigningKey>,
     pub _btc_pubkey: bitcoin::XOnlyPublicKey
 }
@@ -69,7 +67,6 @@ impl App {
             current_strategy: None,
             strategy_selector: None,
             current_order: None,
-            eth_wallet: EthereumWallet::from(signer.clone()),
             signer: signer.clone(),
             secret: [0; 32],
             _btc_pubkey: btc_pubkey

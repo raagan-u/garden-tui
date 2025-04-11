@@ -1,9 +1,6 @@
 use std::env;
-use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
-
-use alloy::providers::ProviderBuilder;
 use bitcoin::consensus::encode::serialize_hex;
 use crossterm::event::{KeyEvent, KeyCode};
 use ratatui::widgets::Block;
@@ -11,7 +8,7 @@ use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::prelude::*;
-use reqwest::Url;
+
 
 use crate::app::AppContext;
 use crate::garden_api::types::InitiateRequest;
@@ -70,16 +67,8 @@ impl OrderDashboardState {
                 return None;
             }
         };
-        
-        let strategies_map = match &quote.strategies_map {
-            Some(map) => map,
-            None => {
-                self.set_status("Strategies map not available".to_string());
-                return None;
-            }
-        };
-        
-        let strategy_info = match strategies_map.get(strat) {
+         
+        let strategy_info = match quote.strategies_map.get(strat) {
             Some(info) => info,
             None => {
                 self.set_status(format!("Strategy '{}' not found in map", strat));
@@ -98,23 +87,11 @@ impl OrderDashboardState {
             }
         };
         
-        let url_str = match strategy_info.source_chain.as_str() {
+        let rpc_url = match strategy_info.source_chain.as_str() {
             "arbitrum_localnet" => "http://localhost:8546",
             "ethereum_localnet" => "http://localhost:8545",
             _ => ""
         };
-        let provider_url = match Url::from_str(url_str) {
-            Ok(url) => url,
-            Err(e) => {
-                self.set_status(format!("Invalid provider URL: {}", e));
-                return None;
-            }
-        };
-        
-        let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
-            .wallet(context.eth_wallet.clone())
-            .on_http(provider_url);
         
         // Get signature with error handling
         let runtime = match tokio::runtime::Runtime::new() {
@@ -125,7 +102,7 @@ impl OrderDashboardState {
             }
         };
         
-        let sig = runtime.block_on(init_and_get_sig(init_data, provider, context.signer.clone(), &strategy_info.source_asset.asset));
+        let sig = runtime.block_on(init_and_get_sig(init_data, rpc_url, context.signer.clone(), &strategy_info.source_asset.asset));
         
         let init_req = InitiateRequest {
             signature: alloy::hex::encode(sig.as_bytes()),
@@ -133,7 +110,7 @@ impl OrderDashboardState {
             order_id: self.order_id.clone(),
         };
 
-        let tx = match context.orderbook.as_ref().unwrap().clone().initiate(init_req) {
+        let tx = match context.orderbook.as_ref().unwrap().initiate(init_req) {
             Ok(tx) => {
                 Some(tx)
             },
@@ -151,7 +128,8 @@ impl OrderDashboardState {
         let secret_hash = hex::decode(swap.secret_hash).unwrap();
         let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, bitcoin::Network::Regtest).unwrap();
         let priv_key_hex = env::var("PRIV_KEY").unwrap();
-        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap()).unwrap();
+        let indexer_url = "http://0.0.0.0:30000";
+        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap(), indexer_url).unwrap();
         Some(tx)
     }
 }
@@ -250,7 +228,7 @@ impl State for OrderDashboardState {
                         let order_result = match &context.orderbook {
                             Some(orderbook) => {
                                 match &context.current_order {
-                                    Some(order) => orderbook.clone().create_order(order.clone()),
+                                    Some(order) => orderbook.create_order(order.clone()),
                                     None => {
                                         self.set_status("No current order available".to_string());
                                         return None;

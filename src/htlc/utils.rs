@@ -1,18 +1,11 @@
-use std::error::Error;
-
 use alloy::{
-    hex::FromHex,
-    primitives::U256,
-    providers::Provider,
-    signers::{local::PrivateKeySigner, Signature, Signer},
-    sol_types::eip712_domain,
+    hex::FromHex, network::EthereumWallet, primitives::U256, providers::{Provider, ProviderBuilder}, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain
 };
 use anyhow::{anyhow, Result};
 use bitcoin::sighash::SighashCache;
 use bitcoin::{
     absolute::LockTime,
     address::Address,
-    consensus::encode::serialize_hex,
     key::{Keypair, Secp256k1},
     secp256k1::Message,
     taproot::LeafVersion,
@@ -25,13 +18,13 @@ use bitcoin::{
     ScriptBuf,
 };
 use rand::TryRngCore;
-use reqwest::Client;
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::str::FromStr;
 
 use crate::{
-    garden_api::types::{AlloyProvider, Initiate},
+    garden_api::types::Initiate,
     htlc,
 };
 
@@ -59,12 +52,10 @@ pub struct Status {
 pub async fn get_utxos(url: &str, address: &str) -> Result<Vec<UTXO>> {
     let client = Client::new();
     let url = url.to_string() + "/address/" + address + "/utxo";
-    println!("{:#?}", url);
 
     let response = client.get(url).send().await?;
     let resp = response.json::<Vec<UTXO>>().await?;
 
-    println!("sucess");
     Ok(resp)
 }
 
@@ -131,7 +122,7 @@ pub fn instant_refund_leaf(initiator_pubkey: &str, redeemer_pubkey: &str) -> Res
     Ok(script)
 }
 
-pub fn generate_secret() -> Result<([u8; 32], [u8; 32]), Box<dyn Error>> {
+pub fn generate_secret() -> Result<([u8; 32], [u8; 32])> {
     let mut secret = [0u8; 32];
 
     rand::rng().try_fill_bytes(&mut secret).unwrap();
@@ -159,7 +150,7 @@ pub fn create_htlc_redeem_transaction(
 
     match Address::from_str(receiver_address) {
         Ok(receiver) => match receiver.require_network(bitcoin::Network::Regtest) {
-            Ok(btc_addr) => println!("Valid address: {:?}", btc_addr),
+            Ok(_) => (),
             Err(e) => println!("Network mismatch: {:?}", e),
         },
         Err(e) => println!("Invalid address format: {:?}", e),
@@ -243,7 +234,7 @@ pub async fn create_tx(
     )
     .unwrap();
 
-    println!("Transaction hex: {}", serialize_hex(&tx));
+    
 
     Ok(tx)
 }
@@ -303,13 +294,35 @@ pub fn sign_and_set_taproot_witness(
 
     Ok(tx)
 }
-
+/// Initializes an HTLC interaction and obtains a signature
+/// 
+/// This function performs several steps:
+/// 1. Creates a new HTLC contract instance using the provided token address
+/// 2. Retrieves the EIP-712 domain information for typed data signing
+/// 3. Gets the token address from the HTLC contract
+/// 4. Creates an ERC20 contract instance
+/// 5. Approves the HTLC contract to spend the maximum amount of tokens
+/// 6. Signs the initiation data with the domain information
+///
+/// Returns a typed data signature needed for HTLC initialization
 pub async fn init_and_get_sig(
     init_data: Initiate,
-    provider: AlloyProvider,
+    provider_url: &str,
     signer: PrivateKeySigner,
     token_address: &str,
 ) -> Signature {
+    
+    let eth_wallet = EthereumWallet::new(signer.clone());
+    
+    let provider_url = Url::from_str(&provider_url).unwrap();
+    
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(eth_wallet)
+        .on_http(provider_url);
+    
+    
+    
     let htlc_contract = htlc::GardenHTLC::new(
         alloy::primitives::Address::from_hex(token_address).unwrap(),
         provider.clone(),
@@ -386,7 +399,7 @@ pub fn submit_tx(url: &str, tx: &bitcoin::Transaction) -> Result<String> {
     Ok(resp.text()?.to_string())
 }
 
-pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64) -> Result<String> {
+pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64, indexer_url: &str) -> Result<String> {
     // Decode private key and set up
     let priv_key_bytes = hex::decode(priv_key_hex)?;
     let secp = Secp256k1::new();
@@ -395,13 +408,11 @@ pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64)
     let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
     let sender_address = Address::p2wpkh(&compressed_pubkey, Network::Regtest);
 
-    // Set up runtime for async calls
-    let url = "http://0.0.0.0:30000";
     let runtime =
         tokio::runtime::Runtime::new().map_err(|e| anyhow!("Unable to create runtime: {}", e))?;
 
     // Get and filter UTXOs
-    let utxos = runtime.block_on(get_utxos(url, &sender_address.to_string()))?;
+    let utxos = runtime.block_on(get_utxos(indexer_url, &sender_address.to_string()))?;
     let filtered_utxos = filter_for_amount(utxos, amount)?;
 
     // Create inputs and track values
@@ -486,7 +497,7 @@ pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64)
     // Get the fully signed transaction
     let signed_tx = sighash_cache.into_transaction();
 
-    let tx_id = submit_tx(url, &signed_tx);
+    let tx_id = submit_tx(indexer_url, &signed_tx);
     tx_id
 }
 
@@ -509,8 +520,7 @@ mod tests {
         let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
         let sender_address = Address::p2wpkh(&compressed_pubkey, Network::Regtest);
 
-        println!("Fund this address to test: {}", sender_address);
-
+    
         // Create a test HTLC address
         let htlc_addr = Address::from_str("bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080").unwrap();
         let checked = htlc_addr
@@ -520,9 +530,8 @@ mod tests {
         let amount = 100000; // 0.001 BTC in satoshis
 
         // Call the function
-        let result = pay_to_htlc(private_key, checked, amount);
+        let result = pay_to_htlc(private_key, checked, amount, "0.0.0.0:3000");
 
-        println!("{:#?}", result);
 
         // Check if the result is Ok (this will fail in actual testing since we need real UTXOs)
         assert!(result.is_ok());

@@ -57,7 +57,6 @@ impl BitcoinHTLC {
 
     fn construct_taproot(&self) -> Result<TaprootBuilder> {
         let redeem_leaf = redeem_leaf(&self.secret_hash, &self.redeemer_pubkey)?;
-        println!("redeem leaf {:#?} ", redeem_leaf.to_hex_string());
         let refund_leaf = refund_leaf(self.timelock, &self.initiator_pubkey)?;
 
         let instant_refund = instant_refund_leaf(&self.initiator_pubkey, &self.redeemer_pubkey)?;
@@ -93,11 +92,6 @@ impl BitcoinHTLC {
             KnownHrp::from(self.network),
         );
         Ok(addr)
-    }
-
-    pub fn address_string(&self) -> Result<String> {
-        let address = self.address()?;
-        Ok(address.to_string())
     }
     
     pub fn get_control_block(&self, leaf: Leaf) -> Result<(ScriptBuf, Vec<u8>)> {
@@ -155,7 +149,6 @@ impl BitcoinHTLC {
             redeem_script.into_bytes(),
             cb_bytes,
         ]);
-        println!("Redeem witness data: {:?}", witness_data);
         Ok(witness_data)
     }
     
