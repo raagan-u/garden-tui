@@ -118,25 +118,6 @@ impl OrderDashboardState {
         tx
     }
     
-    fn init_for_btc(&self, context: &mut AppContext) -> Option<String> {
-        let swap = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap().source_swap;
-        let secret_hash = hex::decode(swap.secret_hash).unwrap();
-        let network = match &context.selected_network{
-            Some(current_network) => {
-                match current_network.as_str() {
-                    "mainnet" => bitcoin::Network::Bitcoin,
-                    "testnet" => bitcoin::Network::Testnet4,
-                    _ => bitcoin::Network::Regtest
-                }
-            },
-            None => bitcoin::Network::Regtest
-        };
-        let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, network).unwrap();
-        let priv_key_hex = env::var("PRIV_KEY").unwrap();
-        let indexer_url = context.provider_urls.as_ref().unwrap()["localnet"]["bitcoin"].to_string().trim_matches('"').to_string();
-        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap(), &indexer_url, network).unwrap();
-        Some(tx)
-    }
 }
 
 impl State for OrderDashboardState {

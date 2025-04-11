@@ -14,7 +14,7 @@ mod garden_api;
 mod htlc;
 mod app;
 mod states;
-
+mod service;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {

@@ -6,7 +6,7 @@ use bitcoin::{
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-use super::utils::{instant_refund_leaf, redeem_leaf, refund_leaf};
+use super::scripts::{redeem_leaf, refund_leaf, instant_refund_leaf};
 
 pub fn garden_nums() -> Result<XOnlyPublicKey, Box<dyn std::error::Error>> {
     let mut hasher = Sha256::new();

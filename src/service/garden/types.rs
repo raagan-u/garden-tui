@@ -115,15 +115,6 @@ impl Display for Strategy {
     }
 }
 
-alloy::sol! {
-    struct Initiate {
-        address redeemer;
-        uint256 timelock;
-        uint256 amount;
-        bytes32 secretHash;
-    }
-}
-
 impl Order {
     pub fn to_sol_initiate(&self, redeemer_addr: &str) -> Initiate {
         let redeemer = Address::from_hex(&redeemer_addr).unwrap();

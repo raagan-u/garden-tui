@@ -70,3 +70,18 @@ impl Quote {
         Ok(readable_strat)
     }
 }
+
+pub fn generate_secret() -> Result<([u8; 32], [u8; 32])> {
+    let mut secret = [0u8; 32];
+
+    rand::rng().try_fill_bytes(&mut secret).unwrap();
+    let mut hasher = Sha256::new();
+    hasher.update(secret);
+    let hash = hasher.finalize();
+
+    let hash_bytes = hex::decode(hash.to_lower_hex_string()).unwrap();
+    let mut hash_array = [0u8; 32];
+    hash_array.copy_from_slice(&hash_bytes);
+
+    Ok((secret, hash_array))
+}
