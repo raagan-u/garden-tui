@@ -330,7 +330,8 @@ impl State for OrderDashboardState {
                             };
                             
                             let btc_recipient = matched_order.create_order.additional_data.bitcoin_optional_recipient;
-                            let tx = runtime.block_on(create_tx(htlc.address().unwrap(), witness_stack, btc_recipient, &priv_key, network)).unwrap();
+                            let indexer_url = context.provider_urls.as_ref().unwrap()["localnet"]["bitcoin"].to_string().trim_matches('"').to_string();
+                            let tx = runtime.block_on(create_tx(htlc.address().unwrap(), witness_stack, btc_recipient, &priv_key, network, &indexer_url)).unwrap();
                             let tx_hex = serialize_hex(&tx);
                             match context.orderbook.as_mut().unwrap().btc_redeem(&self.order_id, &tx_hex) {
                                 Ok(tx) if !tx.is_empty() => {

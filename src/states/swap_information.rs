@@ -1,3 +1,4 @@
+use bitcoin::PrivateKey;
 use crossterm::event::{KeyEvent, KeyCode};
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
@@ -162,7 +163,20 @@ impl State for SwapDashboardState {
                         let (init_src_add, init_dest_addr, btc_opt_recp ) = if strategy.source_chain.contains("bitcoin") {
                             (context._btc_pubkey.to_string(), context.signer.address().to_string(), None)
                         } else if strategy.dest_chain.contains("bitcoin") {
-                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some("bcrt1qhupzn5fjfrg0868z9uff7mnr5zeapluvdkj24a".to_string()))
+                            let priv_key_hex = std::env::var("PRIV_KEY").unwrap();
+                            let network = match &context.selected_network{
+                                Some(current_network) => {
+                                    match current_network.as_str() {
+                                        "mainnet" => bitcoin::Network::Bitcoin,
+                                        "testnet" => bitcoin::Network::Testnet4,
+                                        _ => bitcoin::Network::Regtest
+                                    }
+                                },
+                                None => bitcoin::Network::Regtest
+                            };
+                            let private_key = PrivateKey::from_slice(&hex::decode(&priv_key_hex).unwrap(), network).unwrap();
+                            let addr = get_btc_address_for_priv_key(private_key, network).unwrap();
+                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some(addr))
                         } else {
                             (context.signer.address().to_string(), context.signer.address().to_string(), None)
                         };

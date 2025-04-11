@@ -18,7 +18,6 @@ use bitcoin::{
     ScriptBuf,
 };
 use rand::TryRngCore;
-use ratatui::text::ToLine;
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -29,7 +28,7 @@ use crate::{
     htlc,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct UTXO {
     pub txid: String,
@@ -38,7 +37,7 @@ pub struct UTXO {
     pub value: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct Status {
     pub confirmed: bool,
@@ -140,15 +139,13 @@ pub fn generate_secret() -> Result<([u8; 32], [u8; 32])> {
 
 // Create a transaction for HTLC redemption with specified witness stack format
 pub fn create_htlc_redeem_transaction(
-    utxo_txid: &str,
-    utxo_vout: u32,
-    utxo_value: u64,
+    utxo: UTXO,
     receiver_address: &str,
     fee_rate: u64,
     network: bitcoin::Network
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
     // Parse the UTXO transaction ID
-    let txid = Txid::from_str(utxo_txid).unwrap();
+    let txid = Txid::from_str(&utxo.txid).unwrap();
     // Parse the BTC address, handling possible errors
     let btc_addr = match Address::from_str(receiver_address) {
         Ok(receiver) => match receiver.require_network(network) {
@@ -163,7 +160,7 @@ pub fn create_htlc_redeem_transaction(
     let fee = fee_rate * estimated_tx_size;
 
     // Create output amount after deducting fee
-    let output_value = utxo_value.saturating_sub(fee);
+    let output_value = utxo.value.saturating_sub(fee);
 
     // Create transaction
     let tx = Transaction {
@@ -172,7 +169,7 @@ pub fn create_htlc_redeem_transaction(
         input: vec![TxIn {
             previous_output: OutPoint {
                 txid,
-                vout: utxo_vout,
+                vout: utxo.vout,
             },
             script_sig: ScriptBuf::new(),
             sequence: Sequence(4294967294),
@@ -192,11 +189,12 @@ pub async fn create_tx(
     witness_stack: Vec<Vec<u8>>,
     receiver_address: Option<String>,
     private_key_hex: &str,
-    network: bitcoin::Network
+    network: bitcoin::Network,
+    indexer_url: &str
 ) -> Result<Transaction> {
     let private_key = PrivateKey::from_slice(&hex::decode(private_key_hex)?, network)?;
     let htlc_addr_string = htlc_addr.to_string();
-    let utxos = get_utxos("http://0.0.0.0:30000", &htlc_addr_string).await?;
+    let utxos = get_utxos(indexer_url, &htlc_addr_string).await?;
     if utxos.is_empty() {
         return Err(anyhow!("htlc address is not funded"));
     }
@@ -210,9 +208,7 @@ pub async fn create_tx(
     };
     
     let mut tx = create_htlc_redeem_transaction(
-        &utxos[0].txid,
-        utxos[0].vout,
-        utxos[0].value,
+        utxos[0].clone(),
         &recipient,
         3,
         network
@@ -235,13 +231,11 @@ pub async fn create_tx(
     tx = sign_and_set_taproot_witness(
         tx,
         0,
-        witness_stack[2].clone(),
         leaf_hash,
         private_key,
         TapSighashType::All,
         prevouts,
-        witness_stack[3].clone(),
-        witness_stack[1].clone(),
+        witness_stack.clone()
     )
     .unwrap();
 
@@ -261,13 +255,11 @@ pub fn get_btc_address_for_priv_key(private_key: PrivateKey, network: bitcoin::N
 pub fn sign_and_set_taproot_witness(
     mut tx: Transaction,
     input_index: usize,
-    script_bytes: Vec<u8>,
     leaf_hash: TapLeafHash,
     private_key: bitcoin::PrivateKey,
     sighash_type: TapSighashType,
     prevouts: Vec<bitcoin::TxOut>,
-    control_block: Vec<u8>,
-    secret_hash: Vec<u8>,
+    witness_stack: Vec<Vec<u8>>
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
     // Create keypair from private key
     let secp = Secp256k1::new();
@@ -300,9 +292,9 @@ pub fn sign_and_set_taproot_witness(
 
     // Add the signature as the first element
     witness.push(sig_serialized);
-    witness.push(secret_hash);
-    witness.push(script_bytes);
-    witness.push(control_block);
+    witness.push(&witness_stack[1]);
+    witness.push(&witness_stack[2]);
+    witness.push(&witness_stack[3]);
 
     tx.input[input_index].witness = witness;
 
