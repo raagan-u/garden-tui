@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Create app and load API URLs
     let mut app = App::new(&eth_priv_key);
-    app.load_api_urls()?;
+    app.load_config()?;
 
     // Main loop
     while !app.should_quit {

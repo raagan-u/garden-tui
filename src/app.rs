@@ -24,6 +24,7 @@ pub struct AppContext {
     pub network_list_state: ListState,
     pub networks: Vec<&'static str>,
     pub api_urls: Option<Value>,
+    pub provider_urls: Option<Value>,
     pub selected_network_urls: Option<NetworkUrls>,
     pub selected_network: Option<String>,
     pub final_message: Option<String>,
@@ -59,6 +60,7 @@ impl App {
             network_list_state,
             networks: vec!["Mainnet", "Testnet", "Localnet"],
             api_urls: None,
+            provider_urls: None,
             selected_network_urls: None,
             selected_network: None,
             final_message: None,
@@ -79,12 +81,13 @@ impl App {
         }
     }
     
-    pub fn load_api_urls(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut file = File::open("api.json")?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-        
-        self.context.api_urls = Some(serde_json::from_str(&contents)?);
+        let config = serde_json::from_str::<Value>(&contents)?;
+        self.context.api_urls = Some(config["api_urls"].clone());
+        self.context.provider_urls = Some(config["provider_urls"].clone());
         Ok(())
     }
     

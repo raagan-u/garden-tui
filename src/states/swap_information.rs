@@ -9,6 +9,7 @@ use crate::app::AppContext;
 use crate::garden_api::types::Order;
 use crate::garden_api::types::OrderInputData;
 use crate::htlc;
+use crate::htlc::utils::get_btc_address_for_priv_key;
 
 use super::{State, StateType};
 
@@ -161,7 +162,7 @@ impl State for SwapDashboardState {
                         let (init_src_add, init_dest_addr, btc_opt_recp ) = if strategy.source_chain.contains("bitcoin") {
                             (context._btc_pubkey.to_string(), context.signer.address().to_string(), None)
                         } else if strategy.dest_chain.contains("bitcoin") {
-                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some("bcrt1pw5r6ev6s23uz0sldylfzzyt0aq9guphns85mpudgj57ceu5s7a8sv8ruvr".to_string()))
+                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some("bcrt1qhupzn5fjfrg0868z9uff7mnr5zeapluvdkj24a".to_string()))
                         } else {
                             (context.signer.address().to_string(), context.signer.address().to_string(), None)
                         };

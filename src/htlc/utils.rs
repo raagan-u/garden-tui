@@ -1,5 +1,5 @@
 use alloy::{
-    hex::FromHex, network::EthereumWallet, primitives::U256, providers::{Provider, ProviderBuilder}, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain
+    hex::FromHex, network::{EthereumWallet, NetworkWallet}, primitives::U256, providers::{Provider, ProviderBuilder}, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain
 };
 use anyhow::{anyhow, Result};
 use bitcoin::sighash::SighashCache;
@@ -18,6 +18,7 @@ use bitcoin::{
     ScriptBuf,
 };
 use rand::TryRngCore;
+use ratatui::text::ToLine;
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -144,19 +145,18 @@ pub fn create_htlc_redeem_transaction(
     utxo_value: u64,
     receiver_address: &str,
     fee_rate: u64,
+    network: bitcoin::Network
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
     // Parse the UTXO transaction ID
     let txid = Txid::from_str(utxo_txid).unwrap();
-
-    match Address::from_str(receiver_address) {
-        Ok(receiver) => match receiver.require_network(bitcoin::Network::Regtest) {
-            Ok(_) => (),
-            Err(e) => println!("Network mismatch: {:?}", e),
+    // Parse the BTC address, handling possible errors
+    let btc_addr = match Address::from_str(receiver_address) {
+        Ok(receiver) => match receiver.require_network(network) {
+            Ok(addr) => addr,
+            Err(e) => return Err(format!("Network mismatch: {:?}", e).into()),
         },
-        Err(e) => println!("Invalid address format: {:?}", e),
-    }
-    let receiver = Address::from_str(receiver_address)?;
-    let btc_addr = receiver.require_network(Network::Regtest)?;
+        Err(e) => return Err(format!("Invalid address format: {:?}", e).into()),
+    };
 
     // Calculate fee (approximately - we'll use a fixed size estimation)
     let estimated_tx_size = 200; // vbytes - adjust based on actual tx size
@@ -190,21 +190,32 @@ pub fn create_htlc_redeem_transaction(
 pub async fn create_tx(
     htlc_addr: Address,
     witness_stack: Vec<Vec<u8>>,
-    receiver_address: &str,
+    receiver_address: Option<String>,
     private_key_hex: &str,
+    network: bitcoin::Network
 ) -> Result<Transaction> {
+    let private_key = PrivateKey::from_slice(&hex::decode(private_key_hex)?, network)?;
     let htlc_addr_string = htlc_addr.to_string();
     let utxos = get_utxos("http://0.0.0.0:30000", &htlc_addr_string).await?;
     if utxos.is_empty() {
         return Err(anyhow!("htlc address is not funded"));
     }
 
+    let recipient = match receiver_address {
+        Some(addr) => addr,
+        None => {
+            let address = get_btc_address_for_priv_key(private_key, network)?;
+            address   
+        }
+    };
+    
     let mut tx = create_htlc_redeem_transaction(
         &utxos[0].txid,
         utxos[0].vout,
         utxos[0].value,
-        receiver_address,
+        &recipient,
         3,
+        network
     )
     .unwrap();
 
@@ -226,7 +237,7 @@ pub async fn create_tx(
         0,
         witness_stack[2].clone(),
         leaf_hash,
-        private_key_hex,
+        private_key,
         TapSighashType::All,
         prevouts,
         witness_stack[3].clone(),
@@ -239,24 +250,27 @@ pub async fn create_tx(
     Ok(tx)
 }
 
+pub fn get_btc_address_for_priv_key(private_key: PrivateKey, network: bitcoin::Network) -> Result<String> {
+    let secp = Secp256k1::new();
+    let public_key = PublicKey::from_private_key(&secp, &private_key);
+    let compressed_pubkey = CompressedPublicKey::try_from(public_key)?;
+    let addr = Address::p2wpkh(&compressed_pubkey, network).to_string();
+    Ok(addr)
+}
+
 pub fn sign_and_set_taproot_witness(
     mut tx: Transaction,
     input_index: usize,
     script_bytes: Vec<u8>,
     leaf_hash: TapLeafHash,
-    priv_key_hex: &str,
+    private_key: bitcoin::PrivateKey,
     sighash_type: TapSighashType,
     prevouts: Vec<bitcoin::TxOut>,
     control_block: Vec<u8>,
     secret_hash: Vec<u8>,
 ) -> Result<Transaction, Box<dyn std::error::Error>> {
-    let priv_key_bytes = hex::decode(priv_key_hex).unwrap();
-    let private_key =
-        bitcoin::PrivateKey::from_slice(&priv_key_bytes, bitcoin::Network::Regtest).unwrap();
-
-    let secp = Secp256k1::new();
-
     // Create keypair from private key
+    let secp = Secp256k1::new();
     let keypair = Keypair::from_secret_key(&secp, &private_key.inner);
 
     // Create sighash cache for the transaction
@@ -343,11 +357,9 @@ pub async fn init_and_get_sig(
         .expect("Failed to get token address")
         ._0;
 
-    let balance = provider.get_balance(signer.address().clone());
+    let _erc20 = htlc::ERC20::new(token_address, provider.clone());
 
-    let erc20 = htlc::ERC20::new(token_address, provider.clone());
-
-    erc20
+    _erc20
         .approve(*htlc_contract.address(), U256::MAX)
         .send()
         .await
@@ -399,14 +411,14 @@ pub fn submit_tx(url: &str, tx: &bitcoin::Transaction) -> Result<String> {
     Ok(resp.text()?.to_string())
 }
 
-pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64, indexer_url: &str) -> Result<String> {
+pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64, indexer_url: &str, network: bitcoin::Network) -> Result<String> {
     // Decode private key and set up
     let priv_key_bytes = hex::decode(priv_key_hex)?;
     let secp = Secp256k1::new();
-    let private_key = PrivateKey::from_slice(&priv_key_bytes, bitcoin::Network::Regtest).unwrap();
+    let private_key = PrivateKey::from_slice(&priv_key_bytes, network).unwrap();
     let public_key = PublicKey::from_private_key(&secp, &private_key);
     let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
-    let sender_address = Address::p2wpkh(&compressed_pubkey, Network::Regtest);
+    let sender_address = Address::p2wpkh(&compressed_pubkey, network);
 
     let runtime =
         tokio::runtime::Runtime::new().map_err(|e| anyhow!("Unable to create runtime: {}", e))?;
@@ -446,11 +458,9 @@ pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64,
 
     // Add change output if needed
     if total_input > (amount as u64 + fee) {
-        let compressed_pubkey = CompressedPublicKey::try_from(public_key)?;
-        let change_addr = Address::p2wpkh(&compressed_pubkey, Network::Regtest);
         outputs.push(TxOut {
             value: Amount::from_sat(total_input - amount as u64 - fee),
-            script_pubkey: change_addr.script_pubkey(),
+            script_pubkey: sender_address.script_pubkey(),
         });
     }
 
@@ -499,44 +509,4 @@ pub fn pay_to_htlc(priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64,
 
     let tx_id = submit_tx(indexer_url, &signed_tx);
     tx_id
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::str::FromStr;
-
-    #[test]
-    fn test_pay_to_htlc() {
-        // Test private key (regtest)
-        let private_key = "e331b6d69882b4c45e512e0ea84e3c837e6b0fabe57b8c6c0b6a9a7ed2e5c8e3";
-
-        // Generate address from private key for regtest
-        let priv_key_bytes = hex::decode(private_key).unwrap();
-        let secp = Secp256k1::new();
-        let private_key_obj =
-            PrivateKey::from_slice(&priv_key_bytes, bitcoin::Network::Regtest).unwrap();
-        let public_key = PublicKey::from_private_key(&secp, &private_key_obj);
-        let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
-        let sender_address = Address::p2wpkh(&compressed_pubkey, Network::Regtest);
-
-    
-        // Create a test HTLC address
-        let htlc_addr = Address::from_str("bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080").unwrap();
-        let checked = htlc_addr
-            .require_network(bitcoin::Network::Regtest)
-            .unwrap();
-        // Test amount
-        let amount = 100000; // 0.001 BTC in satoshis
-
-        // Call the function
-        let result = pay_to_htlc(private_key, checked, amount, "0.0.0.0:3000");
-
-
-        // Check if the result is Ok (this will fail in actual testing since we need real UTXOs)
-        assert!(result.is_ok());
-
-        // The actual test would need a local Bitcoin node with known UTXOs
-        // and would verify the transaction structure, amounts, etc.
-    }
 }

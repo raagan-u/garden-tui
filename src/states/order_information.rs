@@ -87,12 +87,7 @@ impl OrderDashboardState {
             }
         };
         
-        let rpc_url = match strategy_info.source_chain.as_str() {
-            "arbitrum_localnet" => "http://localhost:8546",
-            "ethereum_localnet" => "http://localhost:8545",
-            _ => ""
-        };
-        
+        let rpc_url = context.provider_urls.as_ref().unwrap()["localnet"][&strategy_info.source_chain].to_string().trim_matches('"').to_string();
         // Get signature with error handling
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(r) => r,
@@ -102,7 +97,7 @@ impl OrderDashboardState {
             }
         };
         
-        let sig = runtime.block_on(init_and_get_sig(init_data, rpc_url, context.signer.clone(), &strategy_info.source_asset.asset));
+        let sig = runtime.block_on(init_and_get_sig(init_data, &rpc_url, context.signer.clone(), &strategy_info.source_asset.asset));
         
         let init_req = InitiateRequest {
             signature: alloy::hex::encode(sig.as_bytes()),
@@ -126,10 +121,20 @@ impl OrderDashboardState {
     fn init_for_btc(&self, context: &mut AppContext) -> Option<String> {
         let swap = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap().source_swap;
         let secret_hash = hex::decode(swap.secret_hash).unwrap();
-        let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, bitcoin::Network::Regtest).unwrap();
+        let network = match &context.selected_network{
+            Some(current_network) => {
+                match current_network.as_str() {
+                    "mainnet" => bitcoin::Network::Bitcoin,
+                    "testnet" => bitcoin::Network::Testnet4,
+                    _ => bitcoin::Network::Regtest
+                }
+            },
+            None => bitcoin::Network::Regtest
+        };
+        let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, network).unwrap();
         let priv_key_hex = env::var("PRIV_KEY").unwrap();
-        let indexer_url = "http://0.0.0.0:30000";
-        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap(), indexer_url).unwrap();
+        let indexer_url = context.provider_urls.as_ref().unwrap()["localnet"]["bitcoin"].to_string().trim_matches('"').to_string();
+        let tx = pay_to_htlc(&priv_key_hex, htlc.address().unwrap(), swap.amount.to_string().parse::<i64>().unwrap(), &indexer_url, network).unwrap();
         Some(tx)
     }
 }
@@ -300,9 +305,20 @@ impl State for OrderDashboardState {
                         // Redeem
                         let secret_str = hex::encode(context.secret);
                         if context.current_order.as_ref().unwrap().destination_chain.contains("bitcoin") {
-                            let swap = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap().destination_swap;
+                            let matched_order = context.orderbook.as_mut().unwrap().get_matched_order(&self.order_id).unwrap();
+                            let swap = matched_order.destination_swap;
                             let secret_hash = hex::decode(swap.secret_hash).unwrap();
-                            let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, bitcoin::Network::Regtest).unwrap();
+                            let network = match &context.selected_network{
+                                Some(current_network) => {
+                                    match current_network.as_str() {
+                                        "mainnet" => bitcoin::Network::Bitcoin,
+                                        "testnet" => bitcoin::Network::Testnet4,
+                                        _ => bitcoin::Network::Regtest
+                                    }
+                                },
+                                None => bitcoin::Network::Regtest
+                            };
+                            let htlc = BitcoinHTLC::new(secret_hash, swap.initiator, swap.redeemer, swap.timelock as i64, network).unwrap();
                             let witness_stack = htlc.redeem(&context.secret.to_vec()).unwrap();
                             let priv_key = env::var("PRIV_KEY").unwrap();
                             let runtime = match tokio::runtime::Runtime::new() {
@@ -313,7 +329,8 @@ impl State for OrderDashboardState {
                                 }
                             };
                             
-                            let tx = runtime.block_on(create_tx(htlc.address().unwrap(), witness_stack, "bcrt1pw5r6ev6s23uz0sldylfzzyt0aq9guphns85mpudgj57ceu5s7a8sv8ruvr", &priv_key)).unwrap();
+                            let btc_recipient = matched_order.create_order.additional_data.bitcoin_optional_recipient;
+                            let tx = runtime.block_on(create_tx(htlc.address().unwrap(), witness_stack, btc_recipient, &priv_key, network)).unwrap();
                             let tx_hex = serialize_hex(&tx);
                             match context.orderbook.as_mut().unwrap().btc_redeem(&self.order_id, &tx_hex) {
                                 Ok(tx) if !tx.is_empty() => {
@@ -349,7 +366,6 @@ impl State for OrderDashboardState {
                         }
                     },
                     OrderProgress::Redeemed => {
-                        // Already complete
                         self.set_status("Order process complete! Press 'c' to start over.".to_string());
                     },
                     OrderProgress::Failed(ref reason) => {
