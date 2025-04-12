@@ -10,12 +10,7 @@ use ratatui::Frame;
 use ratatui::prelude::*;
 
 
-use crate::app::AppContext;
-use crate::garden_api::types::InitiateRequest;
-use crate::htlc::bitcoin_htlc::BitcoinHTLC;
-use crate::htlc::utils::create_tx;
-use crate::htlc::utils::init_and_get_sig;
-use crate::htlc::utils::pay_to_htlc;
+use crate::context::AppContext;
 
 use super::{State, StateType};
 
@@ -50,74 +45,7 @@ impl OrderDashboardState {
     fn clear_error(&mut self) {
         self.status = None;
     }
-    
-    fn init_for_evm(&mut self, context: &mut AppContext) -> Option<String> {
-        let strat = match &context.current_strategy {
-            Some(s) => s,
-            None => {
-                self.set_status("No strategy selected".to_string());
-                return None;
-            }
-        };
-        
-        let quote = match &context.quote {
-            Some(q) => q,
-            None => {
-                self.set_status("Quote not available".to_string());
-                return None;
-            }
-        };
-         
-        let strategy_info = match quote.strategies_map.get(strat) {
-            Some(info) => info,
-            None => {
-                self.set_status(format!("Strategy '{}' not found in map", strat));
-                return None;
-            }
-        };
-        
-        let redeemer = strategy_info.source_chain_address.clone();
-        
-        // Get init data
-        let init_data = match context.current_order {
-            Some(ref order) => order.to_sol_initiate(&redeemer),
-            None => {
-                self.set_status("Current order not available".to_string());
-                return None;
-            }
-        };
-        
-        let rpc_url = context.provider_urls.as_ref().unwrap()["localnet"][&strategy_info.source_chain].to_string().trim_matches('"').to_string();
-        // Get signature with error handling
-        let runtime = match tokio::runtime::Runtime::new() {
-            Ok(r) => r,
-            Err(e) => {
-                self.set_status(format!("Failed to create runtime: {}", e));
-                return None;
-            }
-        };
-        
-        let sig = runtime.block_on(init_and_get_sig(init_data, &rpc_url, context.signer.clone(), &strategy_info.source_asset.asset));
-        
-        let init_req = InitiateRequest {
-            signature: alloy::hex::encode(sig.as_bytes()),
-            perform_on: "Source".to_string(),
-            order_id: self.order_id.clone(),
-        };
 
-        let tx = match context.orderbook.as_ref().unwrap().initiate(init_req) {
-            Ok(tx) => {
-                Some(tx)
-            },
-            Err(e) => {
-                self.set_status(format!("Initiation failed: {}", e));
-                None
-            }
-        };
-        
-        tx
-    }
-    
 }
 
 impl State for OrderDashboardState {

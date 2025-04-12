@@ -1,9 +1,10 @@
-use std::str::FromStr;
-
+use std::{convert::TryFrom, str::FromStr};
 use alloy::{
-    hex::FromHex, network::EthereumWallet, primitives::U256, providers::ProviderBuilder, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain
+    hex::FromHex, network::EthereumWallet, primitives::{Address, FixedBytes, Uint, U256}, providers::ProviderBuilder, signers::{local::PrivateKeySigner, Signature, Signer}, sol_types::eip712_domain
 };
 use reqwest::Url;
+
+use crate::service::garden::types::Order;
 
 alloy::sol!(
     #[sol(rpc)]
@@ -26,8 +27,32 @@ alloy::sol! {
     }
 }
 
-impl Initiate {
-    
+
+// Assuming this is the `Initiate` struct from your `alloy::sol!` macro
+// and Order is your existing struct
+
+impl TryFrom<(&Order, &str)> for Initiate {
+    type Error = anyhow::Error;
+
+    fn try_from((order, redeemer_addr): (&Order, &str)) -> Result<Self, Self::Error> {
+        let redeemer = Address::from_hex(redeemer_addr)
+            .map_err(|e| anyhow::anyhow!("Failed to parse redeemer address: {}", e))?;
+        
+        let time_lock = Uint::from(order.timelock);
+        
+        let amt = Uint::from_str(order.source_amount.to_string().as_str())
+            .map_err(|e| anyhow::anyhow!("Failed to parse amount: {}", e))?;
+        
+        let secret_hashbytes = FixedBytes::from_hex(&order.secret_hash)
+            .map_err(|e| anyhow::anyhow!("Failed to parse secret hash: {}", e))?;
+        
+        Ok(Initiate {
+            redeemer,
+            timelock: time_lock,
+            amount: amt,
+            secretHash: secret_hashbytes,
+        })
+    }
 }
 
 pub async fn init_and_get_sig(

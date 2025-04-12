@@ -10,16 +10,17 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-mod garden_api;
-mod htlc;
+
 mod app;
-mod states;
+mod ui;
 mod service;
+mod context;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let eth_priv_key = env::var("PRIV_KEY").expect("please provide a valid PRIV_KEY in env");
-    // Setup terminal
+    let btc_priv_key = env::var("BTC_PRIV_KEY").unwrap_or(eth_priv_key.clone());
+    
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;

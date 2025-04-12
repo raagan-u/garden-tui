@@ -1,16 +1,13 @@
 use crossterm::event::KeyEvent;
 use ratatui::Frame;
 
-use crate::app::AppContext;
+use crate::context::AppContext;
 
 pub mod network_information;
-pub mod network_selection;
-pub mod strategy_selector;
 pub mod swap_information;
 pub mod order_information;
 
 pub enum StateType {
-    NetworkSelection,
     NetworkInformation,
     SwapInformation,
     OrderInformation,

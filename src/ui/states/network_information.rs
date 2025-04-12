@@ -3,9 +3,9 @@ use ratatui::{
 };
 use crossterm::event::{KeyCode, KeyEvent};
 
-use crate::app::AppContext;
-use super::{strategy_selector::StrategySelector, State, StateType};
-
+use crate::{context::AppContext, service::garden::types::Strategy};
+use super::{State, StateType};
+use crate::ui::components::selector::Selector;
 pub struct NetworkInformationState;
 
 
@@ -89,7 +89,7 @@ impl State for NetworkInformationState {
             // Check and initialize strategy selector
             if context.strategy_selector.is_none() {
                 if !quote.strategies_map.is_empty() {
-                    context.strategy_selector = Some(StrategySelector::new(&quote.strategies_map));
+                    context.strategy_selector = Some(Selector<Strategy>::new(&quote.strategies_map));
                 } else {
                     eprintln!("Strategies map is empty");
                 }

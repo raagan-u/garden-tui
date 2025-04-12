@@ -1,6 +1,4 @@
-use std::{fmt::Display, str::FromStr};
-
-use alloy::{hex::FromHex, primitives::{Address, FixedBytes, Uint}};
+use std::fmt::Display;
 use bigdecimal::{BigDecimal, FromPrimitive};
 use serde::{Deserialize, Serialize};
 
@@ -112,21 +110,6 @@ impl Display for Strategy {
             self.dest_chain,
             self.dest_asset.asset
         )
-    }
-}
-
-impl Order {
-    pub fn to_sol_initiate(&self, redeemer_addr: &str) -> Initiate {
-        let redeemer = Address::from_hex(&redeemer_addr).unwrap();
-        let time_lock = Uint::from(self.timelock);
-        let amt = Uint::from_str(self.source_amount.to_string().as_str()).unwrap();
-        let secret_hashbytes = FixedBytes::from_hex(self.secret_hash.clone()).unwrap();
-        Initiate {
-            redeemer,
-            timelock: time_lock,
-            amount: amt,
-            secretHash: secret_hashbytes,
-        }
     }
 }
 
