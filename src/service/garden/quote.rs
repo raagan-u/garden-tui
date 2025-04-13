@@ -10,7 +10,7 @@ use super::types::{Order, Strategy};
 #[derive(Debug, Clone)]
 pub struct Quote {
     client: reqwest::blocking::Client,
-    url: String,
+    pub url: String,
     pub strategies_map: HashMap<String, Strategy>,
 }
 

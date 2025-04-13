@@ -1,4 +1,3 @@
-use bitcoin::PrivateKey;
 use crossterm::event::{KeyEvent, KeyCode};
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
@@ -6,11 +5,11 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use ratatui::prelude::*;
 
-use crate::app::AppContext;
-use crate::garden_api::types::Order;
-use crate::garden_api::types::OrderInputData;
-use crate::htlc;
-use crate::htlc::utils::get_btc_address_for_priv_key;
+
+use crate::context::AppContext;
+use crate::service::garden::quote::generate_secret;
+use crate::service::garden::types::Order;
+use crate::service::garden::types::OrderInputData;
 
 use super::{State, StateType};
 
@@ -49,9 +48,9 @@ impl State for SwapDashboardState {
     fn draw(&self, frame: &mut Frame, context: &mut AppContext){
         let size = frame.area();
         
-        let title_span = match (&context.quote, &context.current_strategy) {
-            (Some(quote), Some(strategy)) => {
-                match quote.strategy_readable(strategy) {
+        let title_span = match &context.order.current_strategy {
+            Some(strategy) => {
+                match context.api.quote.strategy_readable(strategy) {
                     Ok(order_pair) => vec![
                         Span::styled("Current Strategy Selected  ", 
                             Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
@@ -156,31 +155,20 @@ impl State for SwapDashboardState {
                     self.quote_price = "please ensure to get quote price".to_string();
                     return None
                 }
-                if let (Some(quote), Some(current_strategy)) = (&context.quote, &context.current_strategy) {
-                    if let Some(strategy) = quote.strategies_map.get(current_strategy) {
+                if let Some(current_strategy) = &context.order.current_strategy {
+                    if let Some(strategy) = context.api.quote.strategies_map.get(current_strategy) {
                         let in_amount = self.input_value.parse::<u64>().unwrap();
                         let out_amount = self.quote_price.parse::<u64>().unwrap();
                         let (init_src_add, init_dest_addr, btc_opt_recp ) = if strategy.source_chain.contains("bitcoin") {
-                            (context._btc_pubkey.to_string(), context.signer.address().to_string(), None)
+                            (context.wallet.btc_xpubkey.to_string(), context.wallet.signer.address().to_string(), None)
                         } else if strategy.dest_chain.contains("bitcoin") {
-                            let priv_key_hex = std::env::var("PRIV_KEY").unwrap();
-                            let network = match &context.selected_network{
-                                Some(current_network) => {
-                                    match current_network.as_str() {
-                                        "mainnet" => bitcoin::Network::Bitcoin,
-                                        "testnet" => bitcoin::Network::Testnet4,
-                                        _ => bitcoin::Network::Regtest
-                                    }
-                                },
-                                None => bitcoin::Network::Regtest
-                            };
-                            let private_key = PrivateKey::from_slice(&hex::decode(&priv_key_hex).unwrap(), network).unwrap();
-                            let addr = get_btc_address_for_priv_key(private_key, network).unwrap();
-                            (context.signer.address().to_string(), context._btc_pubkey.to_string(), Some(addr))
+                            
+                            (context.wallet.signer.address().to_string(), context.wallet.btc_xpubkey.to_string(), Some(context.wallet.btc_address.clone()))
                         } else {
-                            (context.signer.address().to_string(), context.signer.address().to_string(), None)
+                            (context.wallet.signer.address().to_string(), context.wallet.signer.address().to_string(), None)
                         };
-                        let (secret, secret_hash) = htlc::utils::generate_secret().unwrap();
+                        
+                        let (secret, secret_hash) = generate_secret().unwrap();
                         let _order = Order::new(OrderInputData{
                             initiator_source_address: init_src_add,
                             initiator_dest_address: init_dest_addr,
@@ -191,9 +179,10 @@ impl State for SwapDashboardState {
                             btc_opt_recepient: btc_opt_recp
                         });
                         
-                        let attested_order = quote.get_attested_quote(_order).expect("error getting attested quote");
-                        context.current_order = Some(attested_order);
-                        context.secret = secret
+                        
+                        let attested_order = context.api.quote.get_attested_quote(_order).expect("error getting attested quote");
+                        context.order.current_order = Some(attested_order);
+                        context.order.secret = secret
                     }
                 }
                 Some(StateType::OrderInformation)
@@ -203,14 +192,14 @@ impl State for SwapDashboardState {
                     self.quote_price = "please enter a valid input amount".to_string();
                     return None
                 }
-                if let (Some(quote), Some(strategy)) = (&context.quote, &context.current_strategy) {
-                    let details = match quote.strategies_map.get(strategy) {
+                if let Some(strategy) = &context.order.current_strategy {
+                    let details = match context.api.quote.strategies_map.get(strategy) {
                         Some(details) => details,
                         None => return None,
                     };
                    
                     let order_pair = format!("{}:{}::{}:{}", details.source_chain, details.source_asset.asset, details.dest_chain, details.dest_asset.asset);
-                    if let Ok(price) = quote.get_price(&order_pair, &self.input_value) {
+                    if let Ok(price) = context.api.quote.get_price(&order_pair, &self.input_value) {
                         self.quote_price = price.trim_matches('"').to_string();
                         return None
                     }

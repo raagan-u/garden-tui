@@ -4,7 +4,8 @@ use alloy::{
 };
 use reqwest::Url;
 
-use crate::service::garden::types::Order;
+use crate::service::garden::types::SingleSwap;
+
 
 alloy::sol!(
     #[sol(rpc)]
@@ -28,24 +29,22 @@ alloy::sol! {
 }
 
 
-// Assuming this is the `Initiate` struct from your `alloy::sol!` macro
-// and Order is your existing struct
 
-impl TryFrom<(&Order, &str)> for Initiate {
+impl TryFrom<&SingleSwap> for Initiate {
     type Error = anyhow::Error;
 
-    fn try_from((order, redeemer_addr): (&Order, &str)) -> Result<Self, Self::Error> {
-        let redeemer = Address::from_hex(redeemer_addr)
+    fn try_from(swap: &SingleSwap) -> Result<Self, Self::Error> {
+        let redeemer = Address::from_hex(swap.redeemer.clone())
             .map_err(|e| anyhow::anyhow!("Failed to parse redeemer address: {}", e))?;
-        
-        let time_lock = Uint::from(order.timelock);
-        
-        let amt = Uint::from_str(order.source_amount.to_string().as_str())
+
+        let time_lock = Uint::from(swap.timelock);
+
+        let amt = Uint::from_str(swap.amount.to_string().as_str())
             .map_err(|e| anyhow::anyhow!("Failed to parse amount: {}", e))?;
-        
-        let secret_hashbytes = FixedBytes::from_hex(&order.secret_hash)
+
+        let secret_hashbytes = FixedBytes::from_hex(&swap.secret_hash)
             .map_err(|e| anyhow::anyhow!("Failed to parse secret hash: {}", e))?;
-        
+
         Ok(Initiate {
             redeemer,
             timelock: time_lock,
@@ -53,6 +52,7 @@ impl TryFrom<(&Order, &str)> for Initiate {
             secretHash: secret_hashbytes,
         })
     }
+    
 }
 
 pub async fn init_and_get_sig(

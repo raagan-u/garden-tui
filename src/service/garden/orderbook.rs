@@ -16,7 +16,7 @@ pub struct Orderbook {
 }
 
 impl Orderbook {
-    pub fn new(client: reqwest::blocking::Client, url: &str, signer: PrivateKeySigner) -> Self {
+    pub fn new(client: reqwest::blocking::Client, url: &str, signer: &PrivateKeySigner) -> Self {
         let jwt = authenticate(signer, &url, client.clone()).unwrap();
         Self { client , url: url.to_string(), jwt }
     }
@@ -123,7 +123,7 @@ impl Orderbook {
     }
 }
 
-fn authenticate(signer: PrivateKeySigner, url: &str, client: reqwest::blocking::Client) -> Result<String, Box<dyn std::error::Error>> {
+fn authenticate(signer: &PrivateKeySigner, url: &str, client: reqwest::blocking::Client) -> Result<String, Box<dyn std::error::Error>> {
     let res = client.get(format!("{}/nonce", url)).send()?;
 
     let body = res.text()?;

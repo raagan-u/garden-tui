@@ -1,0 +1,29 @@
+{
+  "networks": {
+    "mainnet": {
+      "api": {
+        "evm_relayer_url": "",
+        "quote_server_url": ""
+      },
+      "providers": {}
+    },
+    "testnet": {
+      "api": {
+        "evm_relayer_url": "https://orderbook-stage.hashira.io",
+        "quote_server_url": "https://quote-staging.hashira.io"
+      },
+      "providers": {}
+    },
+    "localnet": {
+      "api": {
+        "evm_relayer_url": "http://127.0.0.1:4426",
+        "quote_server_url": "http://127.0.0.1:6969"
+      },
+      "providers": {
+        "bitcoin": "http://localhost:30000",
+        "arbitrum": "http://localhost:8546",
+        "ethereum": "http://localhost:8545"
+      }
+    }
+  }
+}

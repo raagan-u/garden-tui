@@ -131,7 +131,7 @@ pub struct SingleSwap {
     pub asset: String,
     pub initiator: String,
     pub redeemer: String,
-    pub timelock: i32,
+    pub timelock: i64,
     pub filled_amount: BigDecimal,
     pub amount: BigDecimal,
     pub secret_hash: String,

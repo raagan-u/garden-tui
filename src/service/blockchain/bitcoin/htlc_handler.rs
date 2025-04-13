@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use bitcoin::{
     absolute::LockTime, address::Address, key::{Keypair, Secp256k1}, secp256k1::{All, Message}, sighash::SighashCache, taproot::LeafVersion, transaction::Version, Amount, CompressedPublicKey, EcdsaSighashType, OutPoint, PrivateKey, PublicKey, Script, ScriptBuf, Sequence, TapLeafHash, TapSighashType, Transaction, TxIn, TxOut, Txid, Witness
 };
@@ -89,20 +89,21 @@ impl HtlcHandler {
         })
     }
     
+    pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
+        let tx_id = self.indexer.submit_tx(tx).await.context("failed to broadcast transaction")?;
+        Ok(tx_id)
+    }
+    
     pub fn get_btc_address_for_priv_key(&self, private_key: PrivateKey) -> Result<String> {
-        let secp = Secp256k1::new();
-        let public_key = PublicKey::from_private_key(&secp, &private_key);
+        let public_key = PublicKey::from_private_key(&self.secp, &private_key);
         let compressed_pubkey = CompressedPublicKey::try_from(public_key)?;
         let addr = Address::p2wpkh(&compressed_pubkey, self.network).to_string();
         Ok(addr)
     }
 
     
-    pub fn initaite_htlc(&self, priv_key_hex: &str, htlc_addr: bitcoin::Address, amount: i64) -> Result<Transaction> {
-        let priv_key_bytes = hex::decode(priv_key_hex)?;
-        let secp = Secp256k1::new();
-        let private_key = PrivateKey::from_slice(&priv_key_bytes, self.network).unwrap();
-        let public_key = PublicKey::from_private_key(&secp, &private_key);
+    pub fn initaite_htlc(&self, private_key: PrivateKey, htlc_addr: bitcoin::Address, amount: i64) -> Result<Transaction> {
+        let public_key = PublicKey::from_private_key(&self.secp, &private_key);
         let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
         let sender_address = Address::p2wpkh(&compressed_pubkey, self.network);
     
@@ -174,7 +175,7 @@ impl HtlcHandler {
     
             // Sign the sighash
             let msg = Message::from(sighash);
-            let signature = secp.sign_ecdsa(&msg, &private_key.inner);
+            let signature = self.secp.sign_ecdsa(&msg, &private_key.inner);
     
             // Create the signature with sighash type
             let btc_signature = bitcoin::ecdsa::Signature {
@@ -198,12 +199,9 @@ impl HtlcHandler {
         htlc_addr: Address,
         witness_stack: Vec<Vec<u8>>,
         receiver_address: Option<String>,
-        private_key_hex: &str,
+        private_key: PrivateKey,
         fee_rate: u64,
     ) -> Result<Transaction> {
-        // Parse the private key
-        let private_key = PrivateKey::from_slice(&hex::decode(private_key_hex)?, self.network)?;
-        
         // Determine the recipient address
         let recipient = match receiver_address {
             Some(addr) => addr,
