@@ -3,7 +3,7 @@ use ratatui::Frame;
 
 
 use crate::{
-    config::NetworkConfig, context::AppContext, ui::states::{
+    config::Config, context::AppContext, ui::states::{
         network_information::NetworkInformationState, order_information::OrderDashboardState,
         swap_information::SwapDashboardState, State, StateType,
     }
@@ -17,8 +17,8 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: NetworkConfig) -> App {
-        let context = AppContext::new("localnet", &config);
+    pub fn new(network: &str, config: Config) -> App {
+        let context = AppContext::new(network, &config.get_network(network).unwrap());
         
         App {
             context: context.clone(),

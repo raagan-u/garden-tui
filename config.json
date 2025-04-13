@@ -9,10 +9,14 @@
     },
     "testnet": {
       "api": {
-        "evm_relayer_url": "https://orderbook-stage.hashira.io",
-        "quote_server_url": "https://quote-staging.hashira.io"
+        "evm_relayer_url": "https://orderbook.garden.finance",
+        "quote_server_url": "https://price.garden.finance"
       },
-      "providers": {}
+      "providers": {
+        "bitcoin": "https://mempool.space/testnet4/api",
+        "arbitrum": "wss://arbitrum-sepolia.drpc.org",
+        "ethereum": "wss://ethereum-sepolia-rpc.publicnode.com"
+      }
     },
     "localnet": {
       "api": {

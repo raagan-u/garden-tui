@@ -155,28 +155,3 @@ pub struct MatchedOrder {
     pub destination_swap: SingleSwap,
     pub create_order: Order,
 }
-
-use alloy::{
-    network::{Ethereum, EthereumWallet},
-    providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, RootProvider,
-    },
-    transports::http::Http,
-};
-use reqwest::Client;
-
-/// Provider type for contracts
-pub type AlloyProvider = alloy::providers::fillers::FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<Http<reqwest::Client>>,
-    Http<Client>,
-    Ethereum,
->;
-

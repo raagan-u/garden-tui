@@ -44,6 +44,7 @@ impl Orderbook {
         Ok(create_id.trim_matches('"').to_string())
     }
     pub fn initiate(&self, init_req: InitiateRequest) -> Result<String> {
+        eprint!("initiating");
         let url = format!("{}/relayer/initiate", self.url);
         let resp = self.client.post(url)
             .bearer_auth(&self.jwt)

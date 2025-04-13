@@ -6,7 +6,6 @@ use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
-use serde_json::json;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -219,9 +218,10 @@ impl State for OrderDashboardState {
                                     let runtime = tokio::runtime::Runtime::new()
                                         .map_err(|e| anyhow!("Unable to create runtime: {}", e))
                                         .unwrap();
-        
+                                    
+                                    let (chain, _) = swap.chain.split_once("_").unwrap();
                                     let signature = runtime
-                                        .block_on(init_and_get_sig(init_data, &context.wallet.provider_urls["ethereum"], context.wallet.signer.clone(), &swap.asset));
+                                        .block_on(init_and_get_sig(init_data, &context.wallet.provider_urls[chain], context.wallet.signer.clone(), &swap.asset));
 
                                     let init_req = InitiateRequest{
                                         order_id: self.order_id.to_string(),
@@ -307,9 +307,9 @@ impl State for OrderDashboardState {
                                 .block_on(htlc_handler.create_redeem_tx(
                                     htlc.address().unwrap(),
                                     witness_stack,
-                                    Some("".to_string()),
+                                    context.order.current_order.as_ref().unwrap().additional_data.bitcoin_optional_recipient.clone(),
                                     context.wallet.btc_private_key,
-                                    0,
+                                    3,
                                 ))
                                 .unwrap();
 
