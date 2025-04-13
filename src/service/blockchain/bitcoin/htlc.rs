@@ -6,7 +6,7 @@ use bitcoin::{
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-use super::utils::{instant_refund_leaf, redeem_leaf, refund_leaf};
+use super::scripts::{redeem_leaf, refund_leaf, instant_refund_leaf};
 
 pub fn garden_nums() -> Result<XOnlyPublicKey, Box<dyn std::error::Error>> {
     let mut hasher = Sha256::new();
@@ -56,10 +56,10 @@ impl BitcoinHTLC {
     }
 
     fn construct_taproot(&self) -> Result<TaprootBuilder> {
-        let redeem_leaf = redeem_leaf(&self.secret_hash, &self.redeemer_pubkey)?;
-        let refund_leaf = refund_leaf(self.timelock, &self.initiator_pubkey)?;
+        let redeem_leaf = redeem_leaf(&self.secret_hash, &self.redeemer_pubkey).expect("error building redeem leaf");
+        let refund_leaf = refund_leaf(self.timelock, &self.initiator_pubkey).expect("error building refund leaf");
 
-        let instant_refund = instant_refund_leaf(&self.initiator_pubkey, &self.redeemer_pubkey)?;
+        let instant_refund = instant_refund_leaf(&self.initiator_pubkey, &self.redeemer_pubkey).expect("error building instand refund leaf");
 
         let mut script_map = BTreeMap::new();
         script_map.insert(10, redeem_leaf);
@@ -75,16 +75,16 @@ impl BitcoinHTLC {
     pub fn address(&self) -> Result<Address> {
         let secp = Secp256k1::new();
 
-        let taproot_builder = self.construct_taproot()?;
+        let taproot_builder = self.construct_taproot().expect("error building taproot tree");
 
         if !taproot_builder.is_finalizable() {
             return Err(anyhow::anyhow!("Taproot builder is not finalizable"));
         }
 
         let internal_key =
-            garden_nums().map_err(|e| anyhow!("error creating internal_key {}", e))?;
+            garden_nums().map_err(|e| anyhow!("error creating internal_key {}", e)).expect("error getting garden NUMS");
         
-        let spend_info = taproot_builder.finalize(&secp, internal_key).unwrap();
+        let spend_info = taproot_builder.finalize(&secp, internal_key).expect("error finalizing builder");
         let addr = Address::p2tr(
             &secp,
             internal_key,
@@ -152,6 +152,7 @@ impl BitcoinHTLC {
         Ok(witness_data)
     }
     
+    #[allow(dead_code)]
     pub fn refund(&self) -> Result<Vec<Vec<u8>>> {
         let mut witness_data: Vec<Vec<u8>> = Vec::new();
         let sig_data = hex::decode("000000000000")?;
@@ -167,6 +168,7 @@ impl BitcoinHTLC {
         Ok(witness_data)
     }
     
+    #[allow(dead_code)]
     pub fn instant_refund(&self) -> Result<Vec<Vec<u8>>> {
         let mut witness_data: Vec<Vec<u8>> = Vec::new();
         let sig_data = hex::decode("000000000000")?;

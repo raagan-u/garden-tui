@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitcoin::hex::DisplayHex;
+use rand::TryRngCore;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use super::types::{Order, Strategy};
 
 #[derive(Debug, Clone)]
 pub struct Quote {
     client: reqwest::blocking::Client,
-    url: String,
+    pub url: String,
     pub strategies_map: HashMap<String, Strategy>,
 }
 
@@ -69,4 +72,19 @@ impl Quote {
         let readable_strat = format!("{} to {}", strategy.source_chain, strategy.dest_chain);
         Ok(readable_strat)
     }
+}
+
+pub fn generate_secret() -> Result<([u8; 32], [u8; 32])> {
+    let mut secret = [0u8; 32];
+
+    rand::rng().try_fill_bytes(&mut secret).unwrap();
+    let mut hasher = Sha256::new();
+    hasher.update(secret);
+    let hash = hasher.finalize();
+
+    let hash_bytes = hex::decode(hash.to_lower_hex_string()).unwrap();
+    let mut hash_array = [0u8; 32];
+    hash_array.copy_from_slice(&hash_bytes);
+
+    Ok((secret, hash_array))
 }

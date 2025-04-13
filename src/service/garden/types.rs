@@ -1,6 +1,4 @@
-use std::{fmt::Display, str::FromStr};
-
-use alloy::{hex::FromHex, primitives::{Address, FixedBytes, Uint}};
+use std::fmt::Display;
 use bigdecimal::{BigDecimal, FromPrimitive};
 use serde::{Deserialize, Serialize};
 
@@ -115,30 +113,6 @@ impl Display for Strategy {
     }
 }
 
-alloy::sol! {
-    struct Initiate {
-        address redeemer;
-        uint256 timelock;
-        uint256 amount;
-        bytes32 secretHash;
-    }
-}
-
-impl Order {
-    pub fn to_sol_initiate(&self, redeemer_addr: &str) -> Initiate {
-        let redeemer = Address::from_hex(&redeemer_addr).unwrap();
-        let time_lock = Uint::from(self.timelock);
-        let amt = Uint::from_str(self.source_amount.to_string().as_str()).unwrap();
-        let secret_hashbytes = FixedBytes::from_hex(self.secret_hash.clone()).unwrap();
-        Initiate {
-            redeemer,
-            timelock: time_lock,
-            amount: amt,
-            secretHash: secret_hashbytes,
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 /// Request to initiate a swap with a signature
 pub struct InitiateRequest {
@@ -157,7 +131,7 @@ pub struct SingleSwap {
     pub asset: String,
     pub initiator: String,
     pub redeemer: String,
-    pub timelock: i32,
+    pub timelock: i64,
     pub filled_amount: BigDecimal,
     pub amount: BigDecimal,
     pub secret_hash: String,
@@ -181,28 +155,3 @@ pub struct MatchedOrder {
     pub destination_swap: SingleSwap,
     pub create_order: Order,
 }
-
-use alloy::{
-    network::{Ethereum, EthereumWallet},
-    providers::{
-        fillers::{BlobGasFiller, ChainIdFiller, GasFiller, JoinFill, NonceFiller, WalletFiller},
-        Identity, RootProvider,
-    },
-    transports::http::Http,
-};
-use reqwest::Client;
-
-/// Provider type for contracts
-pub type AlloyProvider = alloy::providers::fillers::FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<EthereumWallet>,
-    >,
-    RootProvider<Http<reqwest::Client>>,
-    Http<Client>,
-    Ethereum,
->;
-

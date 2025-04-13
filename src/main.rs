@@ -1,5 +1,6 @@
 // src/main.rs
-use std::{env, error::Error};
+use std::error::Error;
+use clap::{Arg, Command};
 use ratatui::{
     backend::CrosstermBackend,
     Terminal,
@@ -10,27 +11,48 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-mod garden_api;
-mod htlc;
-mod app;
-mod states;
 
+mod app;
+mod ui;
+mod service;
+mod context;
+mod config;
 use app::App;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let eth_priv_key = env::var("PRIV_KEY").expect("please provide a valid PRIV_KEY in env");
-    // Setup terminal
+    let matches = Command::new("garden-tui")
+        .version("1.0")
+        .about("cross chain swaps from terminal")
+        .args([
+            Arg::new("network")
+                .short('n')
+                .long("network")
+                .value_name("NETWORK")
+                .help("Specifies the network to use (testnet, localnet)")
+                .default_value("localnet")
+                .required(false),
+            Arg::new("config")
+                .short('c')
+                .long("conifg")
+                .value_name("CONFIG")
+                .help("path to config file")
+                .required(true),
+        ])
+        .get_matches();
+
+    // Get the network from command-line arguments
+    let network_name = matches.get_one::<String>("network").unwrap();
+    let config_file_path = matches.get_one::<String>("config").unwrap();
+    
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    
+    let config = config::Config::from_file(config_file_path)?;
+    let mut app = App::new(network_name, config);
 
-    // Create app and load API URLs
-    let mut app = App::new(&eth_priv_key);
-    app.load_config()?;
-
-    // Main loop
     while !app.should_quit {
         terminal.draw(|f| app.draw(f))?;
         if let Event::Key(key) = event::read()? {
