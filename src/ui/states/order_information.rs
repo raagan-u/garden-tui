@@ -52,7 +52,7 @@ impl OrderDashboardState {
 }
 
 impl State for OrderDashboardState {
-    fn draw(&self, frame: &mut Frame, _context: &mut AppContext) {
+    fn draw(&self, frame: &mut Frame, context: &mut AppContext) {
         let size = frame.area();
 
         let title_span = vec![Span::raw("Order Dashboard")];
@@ -69,6 +69,7 @@ impl State for OrderDashboardState {
                 [
                     Constraint::Length(3), // Title
                     Constraint::Length(1),
+                      Constraint::Length(4), //address
                     Constraint::Length(3), // Order ID
                     Constraint::Length(3), // Status
                     Constraint::Min(0),    // Instructions
@@ -85,6 +86,20 @@ impl State for OrderDashboardState {
             chunks[0],
         );
 
+        let address_block = Block::default()
+            .title("Your Addresses")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::White));
+       
+        let addresses = format!("EVM: {}\nBTC: {}",context.wallet.signer.address().to_string(), context.wallet.btc_address);
+       
+        frame.render_widget(
+            Paragraph::new(addresses)
+                .block(address_block)
+                .alignment(Alignment::Left),
+            chunks[2],
+        );
+        
         let output_block = Block::default()
             .title("Order ID")
             .borders(Borders::ALL)
@@ -94,7 +109,7 @@ impl State for OrderDashboardState {
             Paragraph::new(self.order_id.clone())
                 .block(output_block)
                 .alignment(Alignment::Left),
-            chunks[2],
+            chunks[3],
         );
 
         // Error message box
@@ -113,7 +128,7 @@ impl State for OrderDashboardState {
             Paragraph::new(status_message)
                 .block(error_block)
                 .alignment(Alignment::Left),
-            chunks[3],
+            chunks[4],
         );
 
         let instructions_spans = vec![
@@ -128,7 +143,7 @@ impl State for OrderDashboardState {
 
         frame.render_widget(
             Paragraph::new(vec![Line::from(instructions_spans)]).alignment(Alignment::Center),
-            chunks[4],
+            chunks[5],
         );
     }
 

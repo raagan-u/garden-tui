@@ -1,4 +1,5 @@
 use crossterm::event::{KeyEvent, KeyCode};
+use crossterm::style::style;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
@@ -80,10 +81,12 @@ impl State for SwapDashboardState {
             .direction(Direction::Vertical)
             .margin(2)
             .constraints([
-                Constraint::Length(3),
+                Constraint::Length(3), //title
                 Constraint::Length(1),
-                Constraint::Length(3),
-                Constraint::Length(3),
+                Constraint::Length(4), //address
+                Constraint::Length(1),
+                Constraint::Length(3), //in
+                Constraint::Length(3), // out
                 Constraint::Min(0)
             ].as_ref())
             .split(size);
@@ -96,16 +99,31 @@ impl State for SwapDashboardState {
             chunks[0],
         );
         
-        let input_block = Block::default()
-                .title("In Amount")
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White));
+        let address_block = Block::default()
+            .title("Your Addresses")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::White));
+       
+        let addresses = format!("EVM: {}\nBTC: {}",context.wallet.signer.address().to_string(), context.wallet.btc_address);
+       
+        frame.render_widget(
+            Paragraph::new(addresses)
+                .block(address_block)
+                .alignment(Alignment::Left),
+            chunks[2],
+        );
             
+        
+        let input_block = Block::default()
+            .title("In Amount")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::White));
+        
         frame.render_widget(
             Paragraph::new(self.input_value.clone())
                 .block(input_block)
                 .alignment(Alignment::Left),
-            chunks[2],
+            chunks[4],
         );
             
         let output_block = Block::default()
@@ -113,17 +131,17 @@ impl State for SwapDashboardState {
             .borders(Borders::ALL)
             .style(Style::default().fg(Color::White));
             
-        // Fix: Don't use render_stateful_widget for a string
+        
         frame.render_widget(
             Paragraph::new(self.quote_price.clone())
                 .block(output_block)
                 .alignment(Alignment::Left),
-            chunks[3],
+            chunks[5],
         );
             
         if self.input_focused {
             frame.set_cursor_position(
-                Position::new(chunks[2].x + 1 + self.input_value.len() as u16, chunks[2].y + 1)
+                Position::new(chunks[4].x + 1 + self.input_value.len() as u16, chunks[4].y + 1)
             );
         }
             
@@ -138,7 +156,7 @@ impl State for SwapDashboardState {
         frame.render_widget(
             Paragraph::new(vec![Line::from(instructions_spans)])
                 .alignment(Alignment::Center),
-            chunks[4],
+            chunks[6],
         );
     }
     

@@ -1,4 +1,3 @@
-// src/main.rs
 use std::error::Error;
 use clap::{Arg, Command};
 use ratatui::{
