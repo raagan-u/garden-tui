@@ -22,7 +22,7 @@ impl Orderbook {
     }
 
     pub fn create_order(&self, order: Order) -> Result<String> {
-        let url = format!("{}/relayer/create-order", self.url);
+        let url = format!("{}/create-order", self.url);
         let resp = self.client
             .post(url)
             .bearer_auth(&self.jwt)
@@ -45,7 +45,7 @@ impl Orderbook {
     }
     pub fn initiate(&self, init_req: InitiateRequest) -> Result<String> {
         eprint!("initiating");
-        let url = format!("{}/relayer/initiate", self.url);
+        let url = format!("{}/initiate", self.url);
         let resp = self.client.post(url)
             .bearer_auth(&self.jwt)
             .json(&init_req)
@@ -75,7 +75,7 @@ impl Orderbook {
     }
     
     pub fn redeem(&self, order_id: &str, secret: &str) -> Result<String> {
-        let url = format!("{}/relayer/redeem", self.url);
+        let url = format!("{}/redeem", self.url);
         let resp = self.client.post(url).bearer_auth(&self.jwt)
             .json(&serde_json::json!({
                 "order_id": order_id,
@@ -125,7 +125,7 @@ impl Orderbook {
 }
 
 fn authenticate(signer: &PrivateKeySigner, url: &str, client: reqwest::blocking::Client) -> Result<String, Box<dyn std::error::Error>> {
-    let res = client.get(format!("{}/nonce", url)).send()?;
+    let res = client.post(format!("https://testnet.api.hashira.io/auth/siwe/challenges")).send().expect("error getting nonce");
 
     let body = res.text()?;
     let response: serde_json::Value = serde_json::from_str(&body)?;
@@ -171,7 +171,7 @@ fn authenticate(signer: &PrivateKeySigner, url: &str, client: reqwest::blocking:
     });
 
     let res = client
-        .post(format!("{}/verify", url))
+        .post(format!("https://testnet.api.hashira.io/auth/siwe/tokens"))
         .json(&payload)
         .send().unwrap();
     

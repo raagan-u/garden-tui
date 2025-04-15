@@ -14,6 +14,7 @@ use crate::service::blockchain::bitcoin::htlc::BitcoinHTLC;
 use crate::service::blockchain::bitcoin::htlc_handler::HtlcHandler;
 use crate::service::blockchain::evm::init_and_get_sig;
 use crate::service::blockchain::evm::Initiate;
+use crate::service::garden::types::big_decimal_to_i64;
 use crate::service::garden::types::InitiateRequest;
 
 use super::{State, StateType};
@@ -208,7 +209,7 @@ impl State for OrderDashboardState {
                                         context.wallet.btc_network,
                                     )
                                     .unwrap();
-                                    let amount: i64 = 9999;
+                                    let amount = big_decimal_to_i64(&swap.amount).unwrap();
                                     let tx = htlc_handler
                                         .initaite_htlc(
                                             context.wallet.btc_private_key,

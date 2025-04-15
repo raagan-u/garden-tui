@@ -9,8 +9,8 @@
     },
     "testnet": {
       "api": {
-        "evm_relayer_url": "https://orderbook.garden.finance",
-        "quote_server_url": "https://price.garden.finance"
+        "evm_relayer_url": "https://testnet.api.hashira.io/relayer",
+        "quote_server_url": "https://testnet.api.hashira.io"
       },
       "providers": {
         "bitcoin": "https://mempool.space/testnet4/api",

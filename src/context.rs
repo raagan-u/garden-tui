@@ -1,7 +1,8 @@
-use std::{collections::HashMap, env, str::FromStr, time::Duration};
+use std::{collections::HashMap, env, str::FromStr, sync::Arc, time::Duration};
 
 use alloy::signers::{k256::ecdsa::SigningKey, local::{LocalSigner, PrivateKeySigner}};
 use bitcoin::{key::Secp256k1, Address, CompressedPublicKey, PrivateKey, PublicKey};
+use reqwest::cookie::Jar;
 
 
 use crate::{config::{ApiConfig, NetworkConfig}, service::garden::{orderbook::Orderbook, quote::Quote, types::Order}};
@@ -81,9 +82,10 @@ pub struct APIContext {
 
 impl APIContext {
     fn new(api_urls: ApiConfig, signer: &PrivateKeySigner) -> Self {
-        
+        let cookie_store = Arc::new(Jar::default());
         let client = reqwest::blocking::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
+            .cookie_provider(cookie_store.clone())
             .build()
             .unwrap();
         

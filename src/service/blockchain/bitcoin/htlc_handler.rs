@@ -16,18 +16,18 @@ impl SimpleIndexer {
         let client = reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
             .build()?;
-        
+
         Ok(
             Self { client, url: url.to_string() }
         )
     }
-    
+
     pub async fn get_utxos(&self, address: &str) -> Result<Vec<UTXO>> {
         let url = format!("{}/address/{}/utxo", &self.url, address);
-    
+
         let response = self.client.get(url).send().await?;
         let resp = response.json::<Vec<UTXO>>().await?;
-    
+
         Ok(resp)
     }
 
@@ -35,7 +35,7 @@ impl SimpleIndexer {
         let utxos = self.get_utxos(address).await?;
         let mut filtered_utxos: Vec<UTXO> = Vec::new();
         let mut total = 0;
-    
+
         for utxo in utxos {
             total += utxo.value as i64;
             filtered_utxos.push(utxo);
@@ -43,32 +43,50 @@ impl SimpleIndexer {
                 return Ok(filtered_utxos);
             }
         }
-    
+
         if total < amount {
             return Err(anyhow!("Not enough funds in UTXOs"));
         }
         Ok(filtered_utxos)
     }
-    
+
     pub async fn submit_tx(&self, tx: &bitcoin::Transaction) -> Result<String> {
         let endpoint = format!("{}/tx", self.url);
         let tx_bytes = bitcoin::consensus::serialize(tx);
         let hex_tx = hex::encode(tx_bytes);
         let str_buffer = hex_tx.as_bytes();
-    
-        let resp = self.client
-            .post(&endpoint)
-            .header("Content-Type", "application/text")
-            .body(str_buffer.to_vec())
-            .send().await
-            .map_err(|e| e)?;
-    
-        if !resp.status().is_success() {
-            let err_msg = resp.text().await.map_err(|e| e)?;
-            return Err(anyhow!("req failed : {:#?}", err_msg));
+
+        const MAX_RETRIES: usize = 3;
+        let mut attempts = 0;
+        let mut last_error = None;
+
+        while attempts < MAX_RETRIES {
+            match self.client
+                .post(&endpoint)
+                .header("Content-Type", "application/text")
+                .body(str_buffer.to_vec())
+                .send().await {
+                    Ok(resp) => {
+                        if resp.status().is_success() {
+                            return Ok(resp.text().await?.to_string());
+                        } else {
+                            let err_msg = resp.text().await.map_err(|e| e)?;
+                            last_error = Some(anyhow!("req failed : {:#?}", err_msg));
+                        }
+                    },
+                    Err(e) => {
+                        last_error = Some(anyhow!("request error: {}", e));
+                    }
+                }
+
+            attempts += 1;
+            if attempts < MAX_RETRIES {
+                // Add a small delay before retrying
+                tokio::time::sleep(tokio::time::Duration::from_millis(500 * attempts as u64)).await;
+            }
         }
-    
-        Ok(resp.text().await?.to_string())
+
+        Err(last_error.unwrap_or_else(|| anyhow!("Failed to submit transaction after {} attempts", MAX_RETRIES)))
     }
 
 }
@@ -88,12 +106,12 @@ impl HtlcHandler {
             secp: Secp256k1::new(),
         })
     }
-    
+
     pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
         let tx_id = self.indexer.submit_tx(tx).await.context("failed to broadcast transaction")?;
         Ok(tx_id)
     }
-    
+
     pub fn get_btc_address_for_priv_key(&self, private_key: PrivateKey) -> Result<String> {
         let public_key = PublicKey::from_private_key(&self.secp, &private_key);
         let compressed_pubkey = CompressedPublicKey::try_from(public_key)?;
@@ -101,17 +119,17 @@ impl HtlcHandler {
         Ok(addr)
     }
 
-    
+
     pub fn initaite_htlc(&self, private_key: PrivateKey, htlc_addr: bitcoin::Address, amount: i64) -> Result<Transaction> {
         let public_key = PublicKey::from_private_key(&self.secp, &private_key);
         let compressed_pubkey = CompressedPublicKey::try_from(public_key).unwrap();
         let sender_address = Address::p2wpkh(&compressed_pubkey, self.network);
-    
+
         let runtime =
             tokio::runtime::Runtime::new().map_err(|e| anyhow!("Unable to create runtime: {}", e))?;
-    
+
         let utxos = runtime.block_on(self.indexer.get_utxos_for_amount(&sender_address.to_string(), amount))?;
-    
+
         // Create inputs and track values
         let mut inputs: Vec<TxIn> = Vec::new();
         let mut input_values: Vec<u64> = Vec::new();
@@ -128,19 +146,19 @@ impl HtlcHandler {
             });
             input_values.push(utxo.value);
         }
-    
+
         // Calculate fee and total input amount
         let fee = 250 * inputs.len() as u64;
         let total_input: u64 = input_values.iter().sum();
-    
+
         // Parse HTLC address and create outputs
         let output = TxOut {
             value: Amount::from_sat(amount as u64),
             script_pubkey: htlc_addr.script_pubkey(),
         };
-    
+
         let mut outputs = vec![output];
-    
+
         // Add change output if needed
         if total_input > (amount as u64 + fee) {
             outputs.push(TxOut {
@@ -148,7 +166,7 @@ impl HtlcHandler {
                 script_pubkey: sender_address.script_pubkey(),
             });
         }
-    
+
         // Create unsigned transaction
         let mut unsigned_tx = Transaction {
             version: Version::TWO,
@@ -156,14 +174,14 @@ impl HtlcHandler {
             input: inputs,
             output: outputs,
         };
-    
+
         // Sign each input
         let mut sighash_cache = SighashCache::new(&mut unsigned_tx);
-    
+
         for i in 0..input_values.len() {
             // Create the script for this input (p2wpkh)
             let script_pubkey = ScriptBuf::new_p2wpkh(&public_key.wpubkey_hash()?);
-    
+
             // Get the sighash to sign
             let sighash_type = EcdsaSighashType::All;
             let sighash = sighash_cache.p2wpkh_signature_hash(
@@ -172,11 +190,11 @@ impl HtlcHandler {
                 Amount::from_sat(input_values[i]),
                 sighash_type,
             )?;
-    
+
             // Sign the sighash
             let msg = Message::from(sighash);
             let signature = self.secp.sign_ecdsa(&msg, &private_key.inner);
-    
+
             // Create the signature with sighash type
             let btc_signature = bitcoin::ecdsa::Signature {
                 signature,
@@ -188,12 +206,12 @@ impl HtlcHandler {
                 &bitcoin::secp256k1::PublicKey::from_slice(&pubkey_bytes)?,
             )
         }
-    
+
         let signed_tx = sighash_cache.into_transaction();
-        
+
         Ok(signed_tx.clone())
     }
-    
+
     pub async fn create_redeem_tx(
         &self,
         htlc_addr: Address,
@@ -207,7 +225,7 @@ impl HtlcHandler {
             Some(addr) => addr,
             None => self.get_btc_address_for_priv_key(private_key)?
         };
-        
+
         // Fetch UTXOs for the HTLC address
         let htlc_addr_string = htlc_addr.to_string();
         let utxos = self.indexer.get_utxos(&htlc_addr_string).await?;
@@ -215,23 +233,23 @@ impl HtlcHandler {
             return Err(anyhow!("htlc address is not funded"));
         }
         let utxo = &utxos[0];
-        
+
         // Parse the UTXO transaction ID
         let txid = Txid::from_str(&utxo.txid).unwrap();
-        
+
         // Parse the BTC address
         let btc_addr = Address::from_str(&recipient)
             .map_err(|e| anyhow!("Invalid address format: {:?}", e))?
             .require_network(self.network)
             .map_err(|e| anyhow!("Network mismatch: {:?}", e))?;
-        
+
         // Calculate fee
         let estimated_tx_size = 200; // vbytes - adjust based on actual tx size
         let fee = fee_rate * estimated_tx_size;
-        
+
         // Create output amount after deducting fee
         let output_value = utxo.value.saturating_sub(fee);
-        
+
         // Create the unsigned transaction
         let mut tx = Transaction {
             version: Version::TWO,
@@ -250,20 +268,20 @@ impl HtlcHandler {
                 script_pubkey: btc_addr.script_pubkey(),
             }],
         };
-        
+
         // Prepare for signing
         let leaf_hash = TapLeafHash::from_script(
             Script::from_bytes(&witness_stack[2]),
             LeafVersion::TapScript,
         );
-        
+
         // Create prevouts for signing
         let mut prevouts = Vec::new();
         prevouts.push(TxOut {
             value: Amount::from_sat(utxo.value),
             script_pubkey: htlc_addr.script_pubkey(),
         });
-        
+
         // Sign the transaction
         tx = self.sign_and_set_taproot_witness(
             tx,
@@ -274,10 +292,10 @@ impl HtlcHandler {
             prevouts,
             witness_stack
         )?;
-        
+
         Ok(tx)
     }
-    
+
     pub fn sign_and_set_taproot_witness(
         &self,
         mut tx: Transaction,
@@ -291,10 +309,10 @@ impl HtlcHandler {
         // Create keypair from private key
         let secp = Secp256k1::new();
         let keypair = Keypair::from_secret_key(&secp, &private_key.inner);
-    
+
         // Create sighash cache for the transaction
         let mut sighash_cache = SighashCache::new(&tx);
-    
+
         // Generate the sighash message to sign using taproot script spend path
         let tap_sighash = sighash_cache.taproot_script_spend_signature_hash(
             input_index,
@@ -302,29 +320,29 @@ impl HtlcHandler {
             leaf_hash,
             sighash_type,
         )?;
-    
+
         // Convert TapSighash to a Message
         let message = Message::from_digest_slice(tap_sighash.as_ref())?;
-    
+
         // Sign the sighash with Schnorr signature
         let signature = secp.sign_schnorr_no_aux_rand(&message, &keypair);
-    
+
         let mut sig_serialized = signature.as_ref().to_vec();
         if sighash_type != TapSighashType::Default {
             sig_serialized.push(sighash_type as u8);
         }
-    
+
         // Create the witness
         let mut witness = Witness::new();
-    
+
         // Add the signature as the first element
         witness.push(sig_serialized);
         witness.push(&witness_stack[1]);
         witness.push(&witness_stack[2]);
         witness.push(&witness_stack[3]);
-    
+
         tx.input[input_index].witness = witness;
-    
+
         Ok(tx)
     }
 }
@@ -350,3 +368,56 @@ pub struct Status {
     pub block_time: u64,
 }
 
+// #[cfg(test)]
+// mod tests {
+//     use crate::service::blockchain::bitcoin::htlc::BitcoinHTLC;
+
+//     use super::*;
+//     #[tokio::test]
+//     async fn test_create_redeem_tx_success() {
+//         // Setup test data
+//         let network = bitcoin::Network::Testnet4;
+//         let secret_hash = "bdf342891870432a0473730d1b0f90ba99ac5dd3571990e2deb4877da9dec3b3";
+//         let secret_hash_bytes = hex::decode(secret_hash).unwrap();
+        
+//         let initiator_pubkey = PublicKey::from_slice(&[0; 33]).unwrap();
+//         let redeemer_pubkey = PublicKey::from_slice(&[1; 33]).unwrap();
+        
+//         let timelock = 1000;
+        
+//         let htlc = BitcoinHTLC::new(secret_hash_bytes, initiator_pubkey, redeemer_pubkey, timelock, network).unwrap();
+
+//         // Create instance of HtlcHandler with mock indexer
+//         let handler = HtlcHandler {
+//             network,
+//             indexer: SimpleIndexer::new("http://localhost:3000").unwrap(),
+//             secp: Secp256k1::new(),
+//         };
+
+//         // Create sample private key
+//         let private_key = PrivateKey::from_wif("cUDfdzioB3SqjbN9vJeFBtLeXQki9FJz8jixwKxG1YzYmX6w9Qwg").unwrap();
+
+//         // Create sample HTLC address
+//         let htlc_addr = htlc.address().unwrap();
+
+//         let secret = "str";
+//         let secret_bytes = hex::decode(secret).unwrap();
+//         // Create sample witness stack
+//         let mut witness_stack = htlc.redeem(&secret_bytes).unwrap();
+//         // Test with explicit receiver address
+//         let receiver_address = Some("tb1qyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy".to_string());
+//         let fee_rate = 2; // 2 sats/vbyte
+
+//         // Execute the function
+//         let tx_result = handler.create_redeem_tx(
+//             htlc_addr,
+//             witness_stack.clone(),
+//             receiver_address,
+//             private_key,
+//             fee_rate
+//         ).await.unwrap();
+        
+        
+        
+//     }
+// }

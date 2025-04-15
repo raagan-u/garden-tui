@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::{BigDecimal, FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,4 +154,16 @@ pub struct MatchedOrder {
     pub source_swap: SingleSwap,
     pub destination_swap: SingleSwap,
     pub create_order: Order,
+}
+
+
+pub fn big_decimal_to_i64(decimal: &BigDecimal) -> Result<i64, String> {
+    if decimal.with_scale(0) != *decimal {
+        return Err("BigDecimal contains fractional component".to_string());
+    }
+    
+    // Convert to i64
+    decimal.to_i64().ok_or_else(|| 
+        format!("Value {} cannot be represented as i64", decimal)
+    )
 }
