@@ -194,7 +194,7 @@ impl State for SwapDashboardState {
                             out_amount, 
                             secret_hash: hex::encode(secret_hash),
                             strategy: strategy.clone(),
-                            btc_opt_recepient: btc_opt_recp
+                            btc_opt_recipient: btc_opt_recp
                         });
                         
                         

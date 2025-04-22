@@ -13,7 +13,7 @@ use crossterm::{
 
 mod app;
 mod ui;
-mod service;
+pub mod service;
 mod context;
 mod config;
 use app::App;
@@ -27,8 +27,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .short('n')
                 .long("network")
                 .value_name("NETWORK")
-                .help("Specifies the network to use (testnet, localnet)")
-                .default_value("localnet")
+                .help("Specifies the network to use (testnet)")
+                .default_value("testnet")
                 .required(false),
             Arg::new("config")
                 .short('c')

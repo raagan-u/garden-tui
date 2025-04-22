@@ -42,7 +42,7 @@ pub struct OrderInputData {
     pub out_amount: u64,
     pub secret_hash: String,
     pub strategy: Strategy,
-    pub btc_opt_recepient: Option<String>
+    pub btc_opt_recipient: Option<String>
 }
 
 impl Order {
@@ -59,11 +59,11 @@ impl Order {
             fee: BigDecimal::from_u64(order_data.strategy.fee).unwrap(), 
             nonce: BigDecimal::from_u64(100).unwrap(), 
             min_destination_confirmations: 1, 
-            timelock: order_data.strategy.min_source_timelock+200, 
+            timelock: order_data.strategy.min_source_timelock*2, 
             secret_hash: order_data.secret_hash, 
             additional_data: AdditionalData { 
                 strategy_id: order_data.strategy.id, 
-                bitcoin_optional_recipient: order_data.btc_opt_recepient, 
+                bitcoin_optional_recipient: order_data.btc_opt_recipient, 
                 input_token_price: None, 
                 output_token_price: None, 
                 sig: None, 

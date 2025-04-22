@@ -17,7 +17,7 @@ pub struct Quote {
 impl Quote {
     
     pub fn new(client: reqwest::blocking::Client, url: String) -> Result<Self> {
-        let resp = client.get(format!("{}/quote/strategies", url)).send().unwrap();
+        let resp = client.get(format!("{}/strategies", url)).send().unwrap();
         
         let response = resp.json::<Value>().map_err(|e| anyhow!("error fetching strategies from quote {}", e)).unwrap();
         
@@ -33,7 +33,7 @@ impl Quote {
     }
     
     pub  fn get_price(&self, order_pair: &str, amount: &str) -> Result<String> {
-        let url = format!("{}/quote?order_pair={}&amount={}&exact_out={}", self.url, order_pair, amount, false);
+        let url = format!("{}/price?order_pair={}&amount={}&exact_out={}", self.url, order_pair, amount, false);
         
         let resp = self.client.get(&url).send()?;
         
@@ -51,7 +51,7 @@ impl Quote {
     }
     
     pub  fn get_attested_quote(&self, order: Order) -> Result<Order> {
-        let url = format!("{}/quote/attested", self.url);
+        let url = format!("{}/attested", self.url);
         let resp = self.client.post(&url).json(&order).send()?;
         
         let mut response = resp.json::<Value>()

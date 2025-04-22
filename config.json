@@ -9,24 +9,13 @@
     },
     "testnet": {
       "api": {
-        "evm_relayer_url": "https://testnet.api.hashira.io/relayer",
-        "quote_server_url": "https://testnet.api.hashira.io"
+        "evm_relayer_url": "https://testnet.api.garden.finance",
+        "quote_server_url": "https://testnet.api.garden.finance/quote"
       },
       "providers": {
         "bitcoin": "https://mempool.space/testnet4/api",
-        "arbitrum": "wss://arbitrum-sepolia.drpc.org",
-        "ethereum": "wss://ethereum-sepolia-rpc.publicnode.com"
-      }
-    },
-    "localnet": {
-      "api": {
-        "evm_relayer_url": "http://127.0.0.1:4426",
-        "quote_server_url": "http://127.0.0.1:6969"
-      },
-      "providers": {
-        "bitcoin": "http://localhost:30000",
-        "arbitrum": "http://localhost:8546",
-        "ethereum": "http://localhost:8545"
+        "arbitrum": "https://arbitrum-sepolia.drpc.org",
+        "ethereum": "https://ethereum-sepolia-rpc.publicnode.com"
       }
     }
   }

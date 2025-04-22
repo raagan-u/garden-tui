@@ -3,6 +3,10 @@ name = "garden_tui"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "order_script"
+path = "src/order_script.rs"
+
 [dependencies]
 anyhow = "1.0.97"
 crossterm = "0.28.1"
