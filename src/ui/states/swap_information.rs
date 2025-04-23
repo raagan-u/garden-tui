@@ -1,5 +1,4 @@
 use crossterm::event::{KeyEvent, KeyCode};
-use crossterm::style::style;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;

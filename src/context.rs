@@ -90,7 +90,7 @@ impl APIContext {
             .unwrap();
         
         let quote = Quote::new(client.clone(), api_urls.quote_server_url).unwrap();
-        let orderbook = Orderbook::new(client, &api_urls.evm_relayer_url, signer);
+        let orderbook = Orderbook::new(client, &api_urls.evm_relayer_url, &api_urls.authenticator_url, &api_urls.orderbook_url, signer);
         
         Self {
             quote,

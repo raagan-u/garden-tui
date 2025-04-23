@@ -11,18 +11,19 @@ use super::types::{InitiateRequest, MatchedOrder, Order};
 #[derive(Clone)]
 pub struct Orderbook {
     client: reqwest::blocking::Client,
-    url: String,
+    relayer_url: String,
+    orderbook_url: String,
     jwt: String,
 }
 
 impl Orderbook {
-    pub fn new(client: reqwest::blocking::Client, url: &str, signer: &PrivateKeySigner) -> Self {
-        let jwt = authenticate(signer, &url, client.clone()).unwrap();
-        Self { client , url: url.to_string(), jwt }
+    pub fn new(client: reqwest::blocking::Client, relayer_url: &str, auth_url:&str, orderbook_url: &str, signer: &PrivateKeySigner) -> Self {
+        let jwt = authenticate(signer, &auth_url, client.clone()).unwrap();
+        Self { client , relayer_url: relayer_url.to_string(), orderbook_url: orderbook_url.to_string(), jwt }
     }
 
     pub fn create_order(&self, order: Order) -> Result<String> {
-        let url = format!("{}/relayer/create-order", self.url);
+        let url = format!("{}/create-order", self.relayer_url);
         let resp = self.client
             .post(url)
             .bearer_auth(&self.jwt)
@@ -44,7 +45,7 @@ impl Orderbook {
         Ok(create_id.trim_matches('"').to_string())
     }
     pub fn initiate(&self, init_req: InitiateRequest) -> Result<String> {
-        let url = format!("{}/relayer/initiate", self.url);
+        let url = format!("{}/initiate", self.relayer_url);
         let resp = self.client.post(url)
             .bearer_auth(&self.jwt)
             .json(&init_req)
@@ -74,7 +75,7 @@ impl Orderbook {
     }
     
     pub fn redeem(&self, order_id: &str, secret: &str) -> Result<String> {
-        let url = format!("{}/relayer/redeem", self.url);
+        let url = format!("{}/redeem", self.relayer_url);
         let resp = self.client.post(url).bearer_auth(&self.jwt)
             .json(&serde_json::json!({
                 "order_id": order_id,
@@ -87,7 +88,7 @@ impl Orderbook {
     }
 
     pub fn btc_redeem(&self, order_id: &str, tx_hex: &str) -> Result<String> {
-        let url = format!("{}/gasless/order/bitcoin/redeem", self.url);
+        let url = format!("{}/bitcoin/redeem", self.relayer_url);
         let resp = self.client.post(url).bearer_auth(&self.jwt)
             .json(&serde_json::json!({
                 "order_id": order_id,
@@ -99,7 +100,7 @@ impl Orderbook {
     }
     
     pub fn get_matched_order(&self, order_id: &str) -> Result<MatchedOrder> {
-        let url = format!("{}/orders/id/matched/{}", self.url, order_id);
+        let url = format!("{}/id/{}/matched", self.orderbook_url, order_id);
         let resp = self.client
             .get(url)
             .send()?;
@@ -124,7 +125,7 @@ impl Orderbook {
 }
 
 fn authenticate(signer: &PrivateKeySigner, url: &str, client: reqwest::blocking::Client) -> Result<String, Box<dyn std::error::Error>> {
-    let res = client.post(format!("{}/auth/siwe/challenges", url)).send().expect("error getting nonce");
+    let res = client.post(format!("{}/siwe/challenges", url)).send().expect("error getting nonce");
 
     let body = res.text()?;
     let response: serde_json::Value = serde_json::from_str(&body)?;
@@ -170,7 +171,7 @@ fn authenticate(signer: &PrivateKeySigner, url: &str, client: reqwest::blocking:
     });
 
     let res = client
-        .post(format!("{}/auth/siwe/tokens", url))
+        .post(format!("{}/siwe/tokens", url))
         .json(&payload)
         .send().unwrap();
     

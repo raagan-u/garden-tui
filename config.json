@@ -2,20 +2,39 @@
   "networks": {
     "mainnet": {
       "api": {
+        "quote_server_url": "",
+        "authenticator_url": "",
         "evm_relayer_url": "",
-        "quote_server_url": ""
+        "orderbook_url": ""
       },
       "providers": {}
     },
     "testnet": {
       "api": {
-        "evm_relayer_url": "https://testnet.api.garden.finance",
-        "quote_server_url": "https://testnet.api.garden.finance/quote"
+        "quote_server_url": "https://testnet.api.garden.finance/quote",
+        "authenticator_url": "https://testnet.api.garden.finance/auth",
+        "evm_relayer_url": "https://testnet.api.garden.finance/relayer",
+        "orderbook_url": "https://testnet.api.garden.finance/orders"
+        
       },
       "providers": {
         "bitcoin": "https://mempool.space/testnet4/api",
         "arbitrum": "https://arbitrum-sepolia.drpc.org",
         "ethereum": "https://ethereum-sepolia-rpc.publicnode.com"
+      }
+    },
+    "localnet": {
+      "api": {
+        "quote_server_url": "http://localhost:6969",
+        "authenticator_url": "http://localhost:4427",
+        "evm_relayer_url": "http://localhost:4426",
+        "orderbook_url": "http://localhost:4455"
+        
+      },
+      "providers": {
+        "bitcoin": "http://localhost:30000",
+        "arbitrum": "http://localhost:8546",
+        "ethereum": "http://localhost:8545"
       }
     }
   }

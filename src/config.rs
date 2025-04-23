@@ -18,8 +18,10 @@ pub struct NetworkConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
-    pub evm_relayer_url: String,
     pub quote_server_url: String,
+    pub authenticator_url: String,
+    pub evm_relayer_url: String,
+    pub orderbook_url: String,
 }
 
 impl Config {

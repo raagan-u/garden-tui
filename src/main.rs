@@ -27,8 +27,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .short('n')
                 .long("network")
                 .value_name("NETWORK")
-                .help("Specifies the network to use (testnet)")
-                .default_value("testnet")
+                .help("Specifies the network to use (testnet, localnet, mainnet)")
+                .default_value("localnet")
                 .required(false),
             Arg::new("config")
                 .short('c')

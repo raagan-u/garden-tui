@@ -75,7 +75,7 @@ fn main() -> Result<()> {
     let eth_priv_key = "YOUR_ETH_PRIVATE_KEY".to_string();
     let signer = PrivateKeySigner::from_str(&eth_priv_key).expect("ERR CREATING ETH SIGNER");
     
-    let orderbook = Orderbook::new(client, "RELAYER URL", &signer);
+    let orderbook = Orderbook::new(client, "RELAYER URL","AUTH_URL", "ORDERBOOK_URL", &signer);
     
     let order_id = orderbook.create_order(attested_quote)?;
     
