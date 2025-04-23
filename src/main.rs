@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::panic;
 use clap::{Arg, Command};
 use ratatui::{
     backend::CrosstermBackend,
@@ -9,14 +10,24 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-
-
 mod app;
 mod ui;
 pub mod service;
 mod context;
 mod config;
 use app::App;
+
+
+fn restore_terminal() -> Result<(), Box<dyn Error>> {
+    disable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    execute!(
+        stdout,
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    Ok(())
+}
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = Command::new("garden-tui")
@@ -38,28 +49,42 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .required(true),
         ])
         .get_matches();
-
-    // Get the network from command-line arguments
-    let network_name = matches.get_one::<String>("network").unwrap();
-    let config_file_path = matches.get_one::<String>("config").unwrap();
     
+    
+    let network_name = matches.get_one::<String>("network").expect("error retrieving network");
+    let config_file_path = matches.get_one::<String>("config").expect("Config file path is required");
+    
+    // Set up panic hook before touching the terminal
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let _ = restore_terminal();
+        // call the original panic handler after restoring terminal
+        original_hook(panic_info);
+    }));
+    
+    // Initialize terminal
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     
-    let config = config::Config::from_file(config_file_path)?;
-    let mut app = App::new(network_name, config);
-
-    while !app.should_quit {
-        terminal.draw(|f| app.draw(f))?;
-        if let Event::Key(key) = event::read()? {
-            app.handle_key(key);
+    // Run the app inside a result-returning function for clean error handling
+    let run_app_result = (|| -> Result<Option<String>, Box<dyn Error>> {
+        let config = config::Config::from_file(config_file_path)?;
+        let mut app = App::new(network_name, config);
+        
+        while !app.should_quit {
+            terminal.draw(|f| app.draw(f))?;
+            if let Event::Key(key) = event::read()? {
+                app.handle_key(key);
+            }
         }
-    }
-
-    // Restore terminal
+        
+        Ok(app.get_final_message())
+    })();
+    
+    
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -67,11 +92,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-
-    // Display final information if needed
-    if let Some(final_message) = app.get_final_message() {
-        println!("{}", final_message);
+    
+    
+    match run_app_result {
+        Ok(final_message) => {
+            if let Some(message) = final_message {
+                println!("{}", message);
+            }
+            Ok(())
+        },
+        Err(err) => {
+            eprintln!("Application error: {}", err);
+            Err(err)
+        }
     }
-
-    Ok(())
 }
